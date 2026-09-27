@@ -1,0 +1,10 @@
+packages:
+  - apps/*
+
+allowBuilds:
+  '@prisma/engines': true
+  argon2: true
+  prisma: true
+  '@scarf/scarf': false
+  '@parcel/watcher': false
+  unrs-resolver: false

@@ -1,0 +1,155 @@
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// Json columns typed `LocalizedText` hold { pt: string, en?: string }.
+
+model Admin {
+  id           String   @id @default(uuid()) @db.Uuid
+  email        String   @unique
+  passwordHash String
+  tokenVersion Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Profile {
+  id              Int      @id @default(1)
+  name            String
+  headline        Json // LocalizedText
+  summary         Json // LocalizedText
+  about           Json // LocalizedText[]
+  location        Json // LocalizedText
+  availability    Json // LocalizedText
+  workModality    Json // LocalizedText
+  spokenLanguages Json // LocalizedText
+  email           String?
+  phone           String?
+  showEmail       Boolean  @default(true)
+  showPhone       Boolean  @default(false)
+  photoMediaId    String?  @db.Uuid
+  photo           Media?   @relation(fields: [photoMediaId], references: [id], onDelete: Restrict)
+  updatedAt       DateTime @updatedAt
+}
+
+model SocialLink {
+  id        String   @id @default(uuid()) @db.Uuid
+  label     String
+  url       String
+  position  Int      @default(0)
+  visible   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model SkillCategory {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      Json // LocalizedText
+  skills    Skill[]
+  position  Int      @default(0)
+  visible   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Skill {
+  id         String        @id @default(uuid()) @db.Uuid
+  name       String
+  categoryId String        @db.Uuid
+  category   SkillCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  position   Int           @default(0)
+  visible    Boolean       @default(true)
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+}
+
+model Project {
+  id           String   @id @default(uuid()) @db.Uuid
+  title        Json // LocalizedText
+  description  Json // LocalizedText
+  tags         String[]
+  repoUrl      String?
+  demoUrl      String?
+  featured     Boolean  @default(false)
+  imageMediaId String?  @db.Uuid
+  image        Media?   @relation(fields: [imageMediaId], references: [id], onDelete: Restrict)
+  position     Int      @default(0)
+  visible      Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+enum DatePrecision {
+  MONTH
+  YEAR
+}
+
+model Experience {
+  id            String        @id @default(uuid()) @db.Uuid
+  role          Json // LocalizedText
+  company       String
+  bullets       Json // LocalizedText[]
+  startDate     DateTime      @db.Date
+  endDate       DateTime?     @db.Date
+  datePrecision DatePrecision @default(MONTH)
+  position      Int           @default(0)
+  visible       Boolean       @default(true)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+enum EducationKind {
+  DEGREE
+  CERTIFICATION
+  COURSE
+}
+
+model Education {
+  id            String        @id @default(uuid()) @db.Uuid
+  title         Json // LocalizedText
+  institution   String
+  kind          EducationKind
+  startDate     DateTime?     @db.Date
+  endDate       DateTime?     @db.Date
+  datePrecision DatePrecision @default(YEAR)
+  position      Int           @default(0)
+  visible       Boolean       @default(true)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+model Service {
+  id          String   @id @default(uuid()) @db.Uuid
+  title       Json // LocalizedText
+  description Json // LocalizedText
+  position    Int      @default(0)
+  visible     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Media {
+  id        String    @id @default(uuid()) @db.Uuid
+  key       String    @unique
+  mime      String
+  size      Int
+  profiles  Profile[]
+  projects  Project[]
+  createdAt DateTime  @default(now())
+}
+
+// Contact channel is not implemented yet; the table exists so the future module needs no schema redesign.
+model ContactMessage {
+  id        String    @id @default(uuid()) @db.Uuid
+  name      String
+  email     String
+  message   String
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+}

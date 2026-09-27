@@ -1,0 +1,57 @@
+{
+  "name": "api",
+  "private": true,
+  "files": [
+    "dist",
+    "prisma",
+    "prisma.config.ts"
+  ],
+  "scripts": {
+    "build": "nest build",
+    "dev": "nest start --watch",
+    "start": "node dist/main.js",
+    "seed": "node dist/seed.js",
+    "openapi": "nest build && node dist/openapi.js",
+    "lint": "tsc --noEmit && oxlint --type-aware src/ test/",
+    "test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --config test/jest.config.js --runInBand"
+  },
+  "dependencies": {
+    "@nestjs/common": "^12.1.0",
+    "@nestjs/core": "^12.1.0",
+    "@nestjs/jwt": "^12.0.2",
+    "@nestjs/platform-express": "^12.1.0",
+    "@nestjs/swagger": "^12.0.2",
+    "@nestjs/throttler": "^6.7.1",
+    "@prisma/adapter-pg": "^7.10.0",
+    "@prisma/client": "^7.10.0",
+    "argon2": "^0.45.1",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.15.1",
+    "cookie-parser": "^1.4.7",
+    "express": "^5.2.1",
+    "helmet": "^8.3.0",
+    "pdfmake": "^0.3.11",
+    "prisma": "^7.10.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^12.0.7",
+    "@nestjs/schematics": "^12.0.5",
+    "@nestjs/testing": "^12.1.0",
+    "@types/cookie-parser": "^1.4.10",
+    "@types/express": "^5.0.6",
+    "@types/jest": "^30.0.0",
+    "@types/multer": "^2.2.0",
+    "@types/node": "^24.19.0",
+    "@types/pdfmake": "^0.3.3",
+    "@types/supertest": "^7.2.1",
+    "jest": "^30.5.2",
+    "oxlint": "^1.85.0",
+    "oxlint-tsgolint": "^7.0.2003",
+    "supertest": "^7.3.0",
+    "ts-jest": "^29.4.14",
+    "typescript": "~6.0.3"
+  }
+}

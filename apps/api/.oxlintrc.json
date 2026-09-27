@@ -1,0 +1,11 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "ignorePatterns": ["src/generated", "test/jest.config.js"],
+  "rules": {
+    "typescript/no-floating-promises": "error",
+    "typescript/no-misused-spread": "off"
+  },
+  "env": {
+    "node": true
+  }
+}
