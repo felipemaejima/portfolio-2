@@ -16,12 +16,23 @@ A ordem importa: alguns recursos dependem de passos fora da AWS (DNS na Hostinge
 Pré-requisitos: conta AWS no **Paid plan** (os créditos continuam valendo; o plano de preço fixo do CloudFront não
 aceita contas no Free plan), Docker e o domínio comprado na Hostinger.
 
+### 0. Proteger a conta root
+A root tem poder total sobre a conta (inclusive fechá-la) e não pode ser restringida. Ela não é usada no dia a dia.
+
+1. Entre como root e ative **MFA** (app autenticador ou chave de segurança) em *Security credentials*.
+2. Confira que a root **não tem access keys** (se tiver, apague).
+3. Em *Account → IAM user and role access to Billing information*, clique em **Activate**: sem isso, seu usuário
+   SSO não enxerga custos nem budgets.
+4. Saia da root. Daqui em diante, só o usuário do Identity Center.
+
 ### 1. Acesso à conta (IAM Identity Center)
 Credenciais temporárias via SSO em vez de access keys de longa duração.
 
 1. No console AWS, na região `us-east-1`, ative o **IAM Identity Center**, crie seu usuário (você recebe um e-mail
    para definir a senha e o MFA) e atribua a ele o permission set `AdministratorAccess` nesta conta.
    Anote a **AWS access portal URL** (algo como `https://d-xxxxxxxxxx.awsapps.com/start`).
+   Em *Settings → Authentication → Multi-factor authentication*: exija MFA **em todo login**, apenas app
+   autenticador ou chave de segurança (sem SMS). No permission set, uma sessão curta (1–4 h) basta.
 2. `make aws-configure` e responda:
    - *SSO session name*: `portfolio`
    - *SSO start URL*: a URL do portal; *SSO region*: `us-east-1`; *registration scopes*: Enter (padrão)
@@ -29,7 +40,8 @@ Credenciais temporárias via SSO em vez de access keys de longa duração.
    - escolha a conta/role; *default client Region*: `us-east-1`; *output format*: `json`
    - *profile name*: digite **`portfolio`** (a sugestão da CLI é outra; os comandos do `make` usam este nome)
 3. Nas próximas vezes, `make aws-login` (a sessão expira em algumas horas). O login usa o fluxo de *device code*:
-   a CLI roda num container e mostra uma URL + código para você abrir no navegador.
+   a CLI roda num container e mostra uma URL + código para você abrir no navegador. Só aprove códigos que **você**
+   acabou de gerar no terminal — aprovar um código recebido de outra pessoa entrega a sessão a ela (phishing).
 
 Teste: `make aws ARGS='sts get-caller-identity'` mostra sua conta.
 
@@ -82,13 +94,18 @@ Confirme o e-mail de assinatura do SNS que chega em seguida (alertas de erro). B
 confirmação.
 
 ### 7. GitHub e primeiro deploy
-1. `make tf ARGS='output github_variables'` e crie cada chave em **Settings → Secrets and variables → Actions →
+1. Em **Settings → Environments**, crie o environment **`production`**:
+   - *Deployment branches and tags*: **Selected branches** → só `main`. Isso é obrigatório: a role de deploy na
+     AWS confia no environment, e é esta regra que impede outro branch de usá-lo.
+   - *Required reviewers* (opcional): você mesmo — cada deploy passa a esperar sua aprovação.
+2. `make tf ARGS='output github_variables'` e crie cada chave em **Settings → Secrets and variables → Actions →
    Variables** do repositório (são identificadores, não segredos — os segredos ficam no SSM).
-   Faça isso **antes** de levar este código ao `main`: todo push no `main` que toque a API dispara o deploy.
-2. Leve o código ao `main` (merge do PR) ou, se já estiver lá, rode o workflow manualmente em
+   Faça os itens 1 e 2 **antes** de levar este código ao `main`: todo push no `main` que toque a API dispara o
+   deploy.
+3. Leve o código ao `main` (merge do PR) ou, se já estiver lá, rode o workflow manualmente em
    **Actions → api → Run workflow**. Ele roda: testes → imagem → **migrations no Neon** → release na Lambda → smoke.
    Até este passo o banco está vazio: a imagem do passo 6 ainda não tem tabelas para ler.
-3. `make seed-prod` — cria o admin de produção no Neon (e-mail e senha digitados, nunca salvos). Não faz nada se
+4. `make seed-prod` — cria o admin de produção no Neon (e-mail e senha digitados, nunca salvos). Não faz nada se
    já existir um admin.
 
 ### 8. Conferir

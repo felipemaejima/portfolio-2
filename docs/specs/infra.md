@@ -82,7 +82,8 @@ A API (ver `backend.md`) e o futuro front em React só rodam localmente em Docke
 ### Conta, região e acesso
 - **Conta no Paid plan** da AWS (os créditos continuam valendo). Por quê: contas no plano Free da AWS não podem assinar os planos de preço fixo do CloudFront.
 - **Região única `us-east-1`**. Por quê: é a mais barata, é obrigatória para certificados e web ACLs usados pelo CloudFront, e a latência não pesa (o CloudFront atende a partir de edges no Brasil). O Neon é criado na mesma região.
-- **Acesso humano via IAM Identity Center (SSO)**, com login pelo AWS CLI em container. Por quê: credenciais temporárias; nenhuma access key de longa duração no disco.
+- **Conta root protegida** (MFA, sem access keys, fora do uso diário) e acesso de usuários SSO aos dados de cobrança ativado.
+- **Acesso humano via IAM Identity Center (SSO)** com MFA obrigatório em todo login (app autenticador ou chave de segurança), login pelo AWS CLI em container. Por quê: credenciais temporárias; nenhuma access key de longa duração no disco. O usuário do dia a dia é administrador — aceitável numa conta pessoal operada por Terraform; em empresa, separar um admin de emergência de um perfil diário mais restrito.
 - **Um só ambiente (produção)**. O Terraform recebe nome de ambiente como variável, mas staging não é construído.
 - **Tags padrão** (`project`, `env`, `managed-by=terraform`) aplicadas por `default_tags` do provider.
 
@@ -90,7 +91,7 @@ A API (ver `backend.md`) e o futuro front em React só rodam localmente em Docke
 - Código no diretório `infra/` do monorepo, com duas raízes:
   - **bootstrap**: bucket de estado (versionado, TLS obrigatório, acesso público bloqueado). Aplicado uma vez, com estado local — resolve o "ovo e galinha" de onde guardar o estado do próprio Terraform.
   - **main**: todo o resto, com backend S3 e **lock nativo do S3** (`use_lockfile`, Terraform ≥ 1.10), sem DynamoDB.
-- Arquivos por assunto (DNS, web/CDN, WAF, API, storage, CI, observabilidade), **sem módulos próprios**: um único consumidor não justifica a abstração.
+- Arquivos por assunto (DNS, web/CDN, WAF, API, storage, CI, observabilidade, auditoria), **sem módulos próprios**: um único consumidor não justifica a abstração.
 - Versões fixadas (Terraform e providers aws, random, archive); lockfile com hashes para Linux e macOS.
 - **Estado é sensível**: contém os segredos gerados e lidos (JWT, URL do banco).
 - Executado via imagem Docker oficial do Terraform, com targets no Makefile, rodando como o usuário do host.
@@ -157,7 +158,7 @@ A API (ver `backend.md`) e o futuro front em React só rodam localmente em Docke
 - O CI lê a URL direta do SSM via OIDC — **nenhum segredo de banco no GitHub**; o GitHub guarda só identificadores (ARNs, nomes).
 
 ### CI/CD (GitHub Actions)
-- **Provedor OIDC do GitHub**; roles com trust restrito ao repositório e à branch `main`, permissões mínimas por workflow (API: push no ECR, update da função, leitura da URL direta; backup: leitura da URL direta e escrita no bucket de backups; web: sync do bucket e invalidação do CDN — pronta para o `apps/web`).
+- **Provedor OIDC do GitHub**; cada role confia num único `sub` do token: as de deploy (API e web), só em jobs do **environment `production`** do repositório — environment restrito ao `main` e com aprovação manual opcional no GitHub (gratuito em repositório público); a de backup, só no `main` (job agendado, sem aprovação). Permissões mínimas por workflow (API: push no ECR, update da função, leitura da URL direta; backup: leitura da URL direta e escrita no bucket de backups; web: sync do bucket e invalidação do CDN — pronta para o `apps/web`).
 - **Workflow da API**: lint + e2e (Postgres 18 como serviço) → build **arm64** (runner ARM nativo) → push no ECR → `migrate deploy` → atualização da Lambda → smoke test. Deploys serializados e nunca cancelados no meio.
 - **Workflow de backup** (diário): `pg_dump` pela conexão direta → bucket de backups (lifecycle de 30 dias).
 - **Workflow do web**: fora de escopo (nasce com o `apps/web`).
@@ -170,6 +171,9 @@ A API (ver `backend.md`) e o futuro front em React só rodam localmente em Docke
 - **AWS Budgets**: US$ 11/mês, e-mail em 50/80/100% (real) e 100% (previsto). O Budget sozinho **alerta, não bloqueia**.
 - **Cost Anomaly Detection** com e-mail diário.
 - **Alarmes** → SNS → e-mail: `5xxErrorRate` do CloudFront (≥ 10% em 5 min) e o disparo do disjuntor.
+- **Auditoria**:
+  - **CloudTrail** multi-região com eventos de gerenciamento (a primeira cópia é gratuita) num bucket próprio, com validação de integridade dos logs e expiração em 1 ano — custo de centavos de S3. Eventos de dados e Insights (cobrados por evento) ficam desligados.
+  - **IAM Access Analyzer** de acesso externo (gratuito), com achados enviados por e-mail via EventBridge → SNS. O analisador de acesso não usado (pago) fica de fora.
 - **Endurecimento**: todos os buckets recusam acesso sem TLS; registro **CAA** no DNS (só a Amazon emite certificados para o domínio); ECR guarda as 5 imagens mais recentes (~1 GB cada).
 - **Riscos residuais aceitos** (documentados, sem custo fixo para eliminar):
   - a role de deploy do CI lê a configuração da Lambda (incluindo segredos nas variáveis de ambiente) — equivalente ao acesso que ela já tem ao banco para migrar; o trust OIDC restringe a role ao `main` deste repositório;

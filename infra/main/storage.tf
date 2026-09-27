@@ -5,6 +5,7 @@ locals {
     web     = "Built SPA files, served by CloudFront"
     uploads = "Admin uploads (objects under uploads/), served by CloudFront at /uploads/*"
     backups = "Daily pg_dump of the Neon database"
+    audit   = "CloudTrail logs (management events)"
   }
 }
 
@@ -24,7 +25,8 @@ resource "aws_s3_bucket_public_access_block" "this" {
   restrict_public_buckets = true
 }
 
-# Refuse any access without TLS. web/uploads merge this into their CloudFront policy (web.tf).
+# Refuse any access without TLS. web/uploads merge this into their CloudFront policy (web.tf), audit into its
+# CloudTrail policy (audit.tf).
 data "aws_iam_policy_document" "tls_only" {
   for_each = aws_s3_bucket.this
   statement {

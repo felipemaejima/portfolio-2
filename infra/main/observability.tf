@@ -2,6 +2,31 @@ resource "aws_sns_topic" "alerts" {
   name = "${local.name}-alerts"
 }
 
+# Who may publish: CloudWatch alarms and the Access Analyzer EventBridge rule (audit.tf) of this account.
+# (A custom policy replaces the default one, so each service publisher must be listed.)
+resource "aws_sns_topic_policy" "alerts" {
+  arn = aws_sns_topic.alerts.arn
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect    = "Allow"
+        Principal = { Service = "cloudwatch.amazonaws.com" }
+        Action    = "SNS:Publish"
+        Resource  = aws_sns_topic.alerts.arn
+        Condition = { ArnLike = { "aws:SourceArn" = "arn:aws:cloudwatch:us-east-1:${local.account_id}:alarm:*" } }
+      },
+      {
+        Effect    = "Allow"
+        Principal = { Service = "events.amazonaws.com" }
+        Action    = "SNS:Publish"
+        Resource  = aws_sns_topic.alerts.arn
+        Condition = { ArnEquals = { "aws:SourceArn" = aws_cloudwatch_event_rule.access_analyzer_findings.arn } }
+      },
+    ]
+  })
+}
+
 # AWS emails a confirmation link; alerts only arrive after it is clicked.
 resource "aws_sns_topic_subscription" "alerts_email" {
   topic_arn = aws_sns_topic.alerts.arn

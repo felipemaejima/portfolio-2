@@ -1,11 +1,15 @@
 # GitHub Actions authenticates with OIDC: each run gets short-lived credentials for a role, so no AWS access key
-# is ever stored in GitHub. Trust is restricted to this repository's main branch.
+# is ever stored in GitHub. Each role trusts a single token subject (the `sub` claim):
+#   - deploy roles: jobs in this repository's `production` environment. The environment (GitHub settings) only
+#     accepts the main branch and can require a manual approval — any other workflow can't assume these roles.
+#   - backup: this repository's main branch (a scheduled job; an approval gate would stop it).
 resource "aws_iam_openid_connect_provider" "github" {
   url            = "https://token.actions.githubusercontent.com"
   client_id_list = ["sts.amazonaws.com"]
 }
 
 data "aws_iam_policy_document" "github_assume" {
+  for_each = local.ci_role_subjects
   statement {
     actions = ["sts:AssumeRoleWithWebIdentity"]
     principals {
@@ -20,12 +24,18 @@ data "aws_iam_policy_document" "github_assume" {
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${var.github_repository}:ref:refs/heads/main"]
+      values   = ["repo:${var.github_repository}:${each.value}"]
     }
   }
 }
 
 locals {
+  ci_role_subjects = {
+    api-deploy = "environment:production"
+    web-deploy = "environment:production"
+    backup     = "ref:refs/heads/main"
+  }
+
   direct_database_url_arn = "arn:aws:ssm:us-east-1:${local.account_id}:parameter${local.ssm_prefix}/direct-database-url"
 
   # SecureStrings use the AWS-managed key; decrypting through SSM needs kms:Decrypt scoped to that service.
@@ -75,7 +85,7 @@ locals {
 resource "aws_iam_role" "ci" {
   for_each           = local.ci_roles
   name               = "${local.name}-github-${each.key}"
-  assume_role_policy = data.aws_iam_policy_document.github_assume.json
+  assume_role_policy = data.aws_iam_policy_document.github_assume[each.key].json
 }
 
 resource "aws_iam_role_policy" "ci" {

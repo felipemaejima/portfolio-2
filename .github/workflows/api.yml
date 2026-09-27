@@ -55,6 +55,8 @@ jobs:
     needs: test
     # Native ARM runner: builds the arm64 (Graviton) image without emulation.
     runs-on: ubuntu-24.04-arm
+    # The AWS deploy role only trusts this environment (restricted to main, optional manual approval in GitHub).
+    environment: production
     permissions:
       contents: read
       id-token: write # OIDC: exchanged for short-lived AWS credentials, no stored keys
