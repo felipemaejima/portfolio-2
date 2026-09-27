@@ -134,7 +134,7 @@ Uma API em NestJS + Prisma + PostgreSQL que é a fonte única do conteúdo do po
 - **Storage**: interface única com driver local; driver escolhido por env.
 - **CV**: gera PDF sob demanda a partir dos mesmos serviços de leitura pública.
 - **Contact**: DTO + endpoint 501.
-- **I18n (lógica pura)**: resolução de `LocalizedText` para um locale com fallback — o único módulo com teste unitário.
+- **I18n (lógica pura)**: resolução de `LocalizedText` para um locale com fallback (helper comum).
 
 ### Autenticação (stateless)
 - **Access token**: JWT, TTL 15 min, enviado por `Authorization: Bearer`, guardado em memória pelo front. Validação 100% stateless.
@@ -217,13 +217,14 @@ Admin (`/admin/*`, JWT obrigatório):
 - `@nestjs/swagger` documenta todos os endpoints a partir dos DTOs e decorators (incluindo `LocalizedText`, envelopes de paginação, esquema Bearer e cookie de refresh).
 - Swagger UI e o JSON do spec servidos em `/docs` **apenas fora de produção** (desligado por env em prod, para não expor a superfície da API).
 - Target `openapi` do Makefile exporta o spec para um arquivo versionado no repo, sem subir o servidor HTTP; é a fonte para o futuro `apps/web` gerar tipos/cliente.
-- Um teste e2e garante que o spec gerado está atualizado (falha se o arquivo versionado divergir do gerado).
+- Drift do spec versionado é verificado com `make openapi && git diff --exit-code apps/api/openapi.json` (o plugin do Swagger depende de informação de tipos, indisponível no ts-jest com `module: nodenext`, então o documento não é comparado dentro do Jest).
 
 ### Docker e Makefile
 - `docker compose` de dev na raiz: `api` (hot reload, monorepo montado), `db` (Postgres 17), `db-test` (Postgres isolado para e2e), volume de uploads e volume para o store do pnpm.
 - Dockerfile multi-stage de produção com pnpm (Corepack): instala com lockfile congelado filtrando só `apps/api` e suas dependências, gera artefato de deploy enxuto, runtime com usuário não-root, `prisma migrate deploy` no start.
-- Stack: Node 22 LTS, pnpm, Nest 11, Prisma 6.
-- Makefile na raiz (tudo via `docker compose`, invocando pnpm com filtro do workspace): `up`, `down`, `logs`, `sh`, `install`, `migrate`, `migration name=…`, `seed`, `studio`, `test`, `test-e2e`, `lint`, `openapi`, `build`, `reset-db`.
+- Stack (versões mais recentes compatíveis entre si): Node 24 LTS, pnpm 12, Nest 12, Prisma 7 (driver adapter `@prisma/adapter-pg`, config em `prisma.config.ts`), TypeScript 6 (TS 7 ainda sem suporte em ts-jest/swagger/typescript-eslint), Jest 30, Postgres 18. Lint com oxlint (padrão do template Nest 12) + `tsc --noEmit`.
+- Makefile na raiz (tudo via `docker compose`, invocando pnpm com filtro do workspace): `up`, `down`, `logs`, `sh`, `install`, `migrate`, `migration name=…`, `seed`, `studio`, `test` (suite e2e; `t=<padrão>` filtra), `lint`, `openapi`, `build`, `reset-db`.
+- Portas do host configuráveis (`API_PORT`, `STUDIO_PORT`).
 
 ## Testing Decisions
 
@@ -239,8 +240,8 @@ Admin (`/admin/*`, JWT obrigatório):
   - Media: upload com extensão falsa (magic bytes inválidos) → 400; excesso de tamanho → 413; delete de mídia referenciada → 409; `unused=true` lista só órfãs.
   - CV: responde `application/pdf`; segundo request com `If-None-Match` → 304; mudança de conteúdo muda o ETag.
   - Contact: payload inválido → 400; válido → 501.
-  - OpenAPI: spec gerado idêntico ao arquivo versionado; `/docs` indisponível com env de produção.
-- **Unitário**: apenas a resolução de `LocalizedText` com fallback (lógica pura).
+  - Swagger: `/docs-json` servido fora de produção e indisponível com env de produção.
+- **Unitário**: nenhum — a resolução de `LocalizedText` é uma linha e o fallback já é coberto pelo e2e de i18n.
 - **Prior art**: nenhum — repositório novo; estes testes estabelecem o padrão.
 
 ## Out of Scope
@@ -265,4 +266,5 @@ Admin (`/admin/*`, JWT obrigatório):
 - `layout.html` é um bundle; o conteúdo real está no template embutido. As seções mapeadas foram: Nav, Hero, Sobre, Habilidades, Projetos, Experiência, Formação, Serviços, Contato, Footer. Os textos do footer ("© ano Nome", "Feito com…") são derivados/estáticos e não viram dados.
 - Os CTAs do hero ("Ver projetos", "Falar comigo") são navegação do front, não dados.
 - Adicionar um terceiro idioma exige só ampliar o tipo `LocalizedText` e a validação — sem migration.
+- Imagem de produção (~940MB) é dominada pelo Prisma CLI mantido para `migrate deploy`; se incomodar, rodar migrations num job/estágio separado e remover o CLI do runtime.
 - Upgrade paths conhecidos: S3 (novo driver de storage), limpeza agendada de mídia (`@nestjs/schedule`), FTS com índices por idioma, cache do CV se o throttle não bastar.
