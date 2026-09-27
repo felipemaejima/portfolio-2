@@ -11,6 +11,9 @@ export const ToList = () =>
     typeof value === 'string' ? value.split(',').map((v) => v.trim()).filter(Boolean) : value,
   );
 
+/** Public GETs may be cached briefly by CloudFront and browsers: a flood of the same URL never reaches the app. */
+export const PUBLIC_CACHE = 'public, max-age=60';
+
 export const ORDER = [{ position: 'asc' }, { createdAt: 'asc' }] as const;
 
 export class LangQuery {

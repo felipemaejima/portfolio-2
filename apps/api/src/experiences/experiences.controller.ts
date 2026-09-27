@@ -1,11 +1,12 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiSecurity, ApiTags } from '@nestjs/swagger';
+import { ADMIN_AUTH } from '../auth/auth.guard';
 import { ReorderDto } from '../common/query';
 import { CreateExperienceDto, UpdateExperienceDto, ExperienceQuery } from './experiences.dto';
 import { ExperiencesService } from './experiences.service';
 
 @ApiTags('admin/experiences')
-@ApiBearerAuth()
+@ApiSecurity(ADMIN_AUTH)
 @Controller('admin/experiences')
 export class ExperiencesController {
   constructor(private readonly experiences: ExperiencesService) {}

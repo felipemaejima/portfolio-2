@@ -1,15 +1,16 @@
 import { Module } from '@nestjs/common';
-import { APP_GUARD } from '@nestjs/core';
-import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { AuthModule } from './auth/auth.module';
+import { PrismaThrottlerStorage } from './common/prisma-throttler.storage';
 import { ConfigModule } from './config/config';
 import { ContactModule } from './contact/contact.controller';
 import { CvModule } from './cv/cv.controller';
 import { EducationModule } from './education/education.module';
 import { ExperiencesModule } from './experiences/experiences.module';
+import { HealthModule } from './health/health.controller';
 import { MediaModule } from './media/media.module';
 import { PortfolioModule } from './portfolio/portfolio.module';
-import { PrismaModule } from './prisma/prisma.service';
+import { PrismaModule, PrismaService } from './prisma/prisma.service';
 import { ProfileModule } from './profile/profile.module';
 import { ProjectsModule } from './projects/projects.module';
 import { ServicesModule } from './services/services.module';
@@ -22,7 +23,15 @@ import { StorageModule } from './storage/storage.service';
     ConfigModule,
     PrismaModule,
     StorageModule,
-    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 100 }]),
+    // Only sensitive routes are rate-limited here (ClientIpThrottlerGuard + @Throttle); the generic global limit
+    // lives in API Gateway. Counters are in Postgres because Lambda instances share no memory.
+    ThrottlerModule.forRootAsync({
+      inject: [PrismaService],
+      useFactory: (prisma: PrismaService) => ({
+        throttlers: [{ ttl: 60_000, limit: 10 }],
+        storage: new PrismaThrottlerStorage(prisma),
+      }),
+    }),
     AuthModule,
     MediaModule,
     ProfileModule,
@@ -35,8 +44,7 @@ import { StorageModule } from './storage/storage.service';
     PortfolioModule,
     CvModule,
     ContactModule,
+    HealthModule,
   ],
-  // Order matters: rate limiting runs before authentication.
-  providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
 export class AppModule {}

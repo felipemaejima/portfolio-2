@@ -1,7 +1,8 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Delete, Get, Header, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
+import { ApiSecurity, ApiTags } from '@nestjs/swagger';
+import { ADMIN_AUTH } from '../auth/auth.guard';
 import { Public } from '../common/public.decorator';
-import { ReorderDto } from '../common/query';
+import { PUBLIC_CACHE, ReorderDto } from '../common/query';
 import { AdminProjectQuery, CreateProjectDto, PublicProjectQuery, UpdateProjectDto } from './projects.dto';
 import { ProjectsService } from './projects.service';
 
@@ -13,13 +14,14 @@ export class PublicProjectsController {
 
   /** All visible projects (the "see all projects" page). */
   @Get()
+  @Header('Cache-Control', PUBLIC_CACHE)
   list(@Query() query: PublicProjectQuery) {
     return this.projects.listPublic(query, query.lang);
   }
 }
 
 @ApiTags('admin/projects')
-@ApiBearerAuth()
+@ApiSecurity(ADMIN_AUTH)
 @Controller('admin/projects')
 export class ProjectsController {
   constructor(private readonly projects: ProjectsService) {}

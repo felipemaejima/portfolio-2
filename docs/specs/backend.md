@@ -137,7 +137,7 @@ Uma API em NestJS + Prisma + PostgreSQL que é a fonte única do conteúdo do po
 - **I18n (lógica pura)**: resolução de `LocalizedText` para um locale com fallback (helper comum).
 
 ### Autenticação (stateless)
-- **Access token**: JWT, TTL 15 min, enviado por `Authorization: Bearer`, guardado em memória pelo front. Validação 100% stateless.
+- **Access token**: JWT, TTL 15 min, enviado em `X-Authorization: Bearer <token>` (não em `Authorization`, que o CloudFront sobrescreve com a assinatura do OAC — ver `infra.md`), guardado em memória pelo front. Validação 100% stateless.
 - **Refresh token**: JWT, TTL 7 dias, em cookie `httpOnly; Secure; SameSite=Strict`, com `Path` restrito ao endpoint de refresh. Rotação a cada uso (novo par emitido).
 - **Revogação**: o admin tem `tokenVersion` (int). O refresh carrega a versão; o endpoint de refresh compara com o banco (única leitura de estado). Logout e troca de senha fazem `tokenVersion++`, invalidando todos os refresh tokens.
 - Segredos distintos para access e refresh; algoritmo fixado na verificação.
@@ -148,9 +148,9 @@ Uma API em NestJS + Prisma + PostgreSQL que é a fonte única do conteúdo do po
 ### Segurança transversal
 - Helmet; CORS com allowlist (em prod, front e API no mesmo site via reverse proxy em `/api`, então CORS só importa em dev).
 - `ValidationPipe` global com `whitelist`, `forbidNonWhitelisted`, `transform`.
-- `@nestjs/throttler`: limite global moderado; limites estritos em login, refresh, `POST /contact` e `GET /cv`.
+- `@nestjs/throttler`: limites estritos por IP em login, refresh, `POST /contact` e `GET /cv`, com contadores no Postgres (compartilhados entre instâncias). O limite global por IP fica no WAF (ver `infra.md`).
 - Limites de tamanho de corpo e de upload.
-- HTTPS terminado no proxy; app confia no proxy para IP real (necessário para o throttler).
+- HTTPS terminado na borda (CloudFront). O IP real do cliente vem de um header gravado pela borda (`CLIENT_IP_HEADER`), nunca do `X-Forwarded-For`, cujas entradas o cliente pode forjar.
 - Logs estruturados do Nest; sem tabela de auditoria nem lockout por conta.
 
 ### Internacionalização
@@ -180,7 +180,7 @@ Todas as coleções têm `id`, `position` (int, ordenação manual), `visible` (
 - Driver local grava em volume Docker e serve em `/uploads/*` com `X-Content-Type-Options: nosniff` e `Content-Disposition` adequado.
 
 ### Mídia / upload
-- `POST /admin/uploads` (multipart) → valida MIME por **magic bytes** (allowlist: jpeg, png, webp), tamanho máximo, gera key UUID, cria registro `Media` e devolve `{ id, url }`.
+- `POST /api/admin/uploads` com o **arquivo cru como corpo** (`Content-Type: image/*`, até 4 MB; não multipart, para o cliente conseguir calcular o hash exigido pelo OAC) → valida o tipo por **magic bytes** (allowlist: jpeg, png, webp), gera key UUID, cria registro `Media` e devolve `{ id, url }`.
 - Entidades referenciam por `mediaId`.
 - `GET /admin/media?unused=&mime=&page=&pageSize=`; `DELETE /admin/media/:id` recusa (409) se referenciada; ao excluir, remove registro e arquivo.
 - Sem job de limpeza automática.
@@ -191,6 +191,8 @@ Todas as coleções têm `id`, `position` (int, ordenação manual), `visible` (
 - `ETag` derivado do maior `updatedAt` do conteúdo + lang; responde 304 quando inalterado. Throttle estrito. Sem cache em disco.
 
 ### Contrato da API
+Todas as rotas ficam sob o prefixo **`/api`** (em todos os ambientes); os caminhos abaixo o omitem por brevidade.
+
 Público (sem auth):
 - `GET /portfolio?lang=` — agregado: perfil, links sociais, categorias com skills, projetos featured, experiências, formação, serviços. Só itens visíveis, ordenados por `position`.
 - `GET /projects?lang=&tags=&tagsMode=any|all&featured=&q=&sort=position|-createdAt&page=&pageSize=`.
@@ -214,8 +216,8 @@ Admin (`/admin/*`, JWT obrigatório):
 - Paginação por offset (`page`, `pageSize`, máx. 50) com envelope `{ items, total, page, pageSize }` em projects e media. Listas curtas (skills, serviços, links, experiência, formação) sem paginação.
 
 ### OpenAPI / Swagger
-- `@nestjs/swagger` documenta todos os endpoints a partir dos DTOs e decorators (incluindo `LocalizedText`, envelopes de paginação, esquema Bearer e cookie de refresh).
-- Swagger UI e o JSON do spec servidos em `/docs` **apenas fora de produção** (desligado por env em prod, para não expor a superfície da API).
+- `@nestjs/swagger` documenta todos os endpoints a partir dos DTOs e decorators (incluindo `LocalizedText`, envelopes de paginação, esquema `X-Authorization` e cookie de refresh).
+- Swagger UI e o JSON do spec servidos em `/api/docs` **apenas fora de produção** (desligado por env em prod, para não expor a superfície da API).
 - Target `openapi` do Makefile exporta o spec para um arquivo versionado no repo, sem subir o servidor HTTP; é a fonte para o futuro `apps/web` gerar tipos/cliente.
 - Drift do spec versionado é verificado com `make openapi && git diff --exit-code apps/api/openapi.json` (o plugin do Swagger depende de informação de tipos, indisponível no ts-jest com `module: nodenext`, então o documento não é comparado dentro do Jest).
 
@@ -240,7 +242,7 @@ Admin (`/admin/*`, JWT obrigatório):
   - Media: upload com extensão falsa (magic bytes inválidos) → 400; excesso de tamanho → 413; delete de mídia referenciada → 409; `unused=true` lista só órfãs.
   - CV: responde `application/pdf`; segundo request com `If-None-Match` → 304; mudança de conteúdo muda o ETag.
   - Contact: payload inválido → 400; válido → 501.
-  - Swagger: `/docs-json` servido fora de produção e indisponível com env de produção.
+  - Swagger: `/api/docs-json` servido fora de produção e indisponível com env de produção.
 - **Unitário**: nenhum — a resolução de `LocalizedText` é uma linha e o fallback já é coberto pelo e2e de i18n.
 - **Prior art**: nenhum — repositório novo; estes testes estabelecem o padrão.
 
@@ -268,4 +270,4 @@ Admin (`/admin/*`, JWT obrigatório):
 - Adicionar um terceiro idioma exige só ampliar o tipo `LocalizedText` e a validação — sem migration.
 - Imagem de produção (~940MB) é dominada pelo Prisma CLI mantido para `migrate deploy`; se incomodar, rodar migrations num job/estágio separado e remover o CLI do runtime.
 - Upgrade paths conhecidos: S3 (novo driver de storage), limpeza agendada de mídia (`@nestjs/schedule`), FTS com índices por idioma, cache do CV se o throttle não bastar.
-- Deploy na AWS: ver `infra.md` e o ADR 0001; alguns pontos desta spec (limite de upload, `TRUST_PROXY`, rate limit, migrations no start) são substituídos lá para produção.
+- Deploy na AWS: ver `infra.md` e o ADR 0001. Para rodar atrás do CloudFront, a API passou a usar: caminhos sob `/api` (em todos os ambientes), token em `X-Authorization`, upload como arquivo cru de até 4 MB, IP do cliente por header confiável (`CLIENT_IP_HEADER`), `Cache-Control: no-store` por padrão (GETs públicos com cache de 60 s), rate limit persistido no Postgres e migrations no pipeline. Onde este documento diz o contrário, vale `infra.md`.

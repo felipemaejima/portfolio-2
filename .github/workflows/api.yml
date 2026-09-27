@@ -1,0 +1,103 @@
+name: api
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - apps/api/**
+      - package.json
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
+      - infra/smoke.sh
+      - .github/workflows/api.yml
+  workflow_dispatch:
+
+# Deploys run one at a time and are never cancelled halfway (a migration may be running).
+concurrency:
+  group: api-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:18-alpine # same major as local dev and Neon
+        env:
+          POSTGRES_USER: portfolio
+          POSTGRES_PASSWORD: portfolio
+          POSTGRES_DB: portfolio_test
+        ports: ["5432:5432"]
+        options: --health-cmd "pg_isready -U portfolio" --health-interval 2s --health-retries 30
+    env:
+      DATABASE_URL: postgresql://portfolio:portfolio@localhost:5432/portfolio_test
+      PUBLIC_URL: http://localhost:3000
+      JWT_ACCESS_SECRET: ci-only-access-secret-0123456789abcdef
+      JWT_REFRESH_SECRET: ci-only-refresh-secret-0123456789abcdef
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - run: corepack enable && pnpm install --frozen-lockfile
+      - run: pnpm --filter api exec prisma generate
+      - run: pnpm --filter api lint
+      - run: pnpm --filter api exec prisma migrate deploy
+      - run: pnpm --filter api test
+
+  deploy:
+    needs: test
+    # Native ARM runner: builds the arm64 (Graviton) image without emulation.
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+      id-token: write # OIDC: exchanged for short-lived AWS credentials, no stored keys
+    env:
+      # ECR tags are immutable: run id + attempt keep re-runs of the same commit deployable.
+      IMAGE_TAG: ${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_API_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push image
+        id: image
+        run: |
+          IMAGE="${{ steps.ecr.outputs.registry }}/${{ vars.ECR_REPOSITORY }}:$IMAGE_TAG"
+          docker build -f apps/api/Dockerfile --target prod -t "$IMAGE" .
+          docker push "$IMAGE"
+          echo "uri=$IMAGE" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - run: corepack enable && pnpm install --frozen-lockfile
+
+      # Migrations run BEFORE the new code goes live, so they must stay compatible with the code still running
+      # (expand/contract: add first, remove in a later release). Neon's direct URL: the pooler can't run them.
+      - name: Migrate database
+        run: |
+          DATABASE_URL=$(aws ssm get-parameter --name "${{ vars.SSM_DIRECT_DATABASE_URL }}" --with-decryption --query Parameter.Value --output text)
+          echo "::add-mask::$DATABASE_URL"
+          export DATABASE_URL
+          pnpm --filter api exec prisma migrate deploy
+
+      - name: Release on Lambda
+        run: |
+          aws lambda update-function-code --function-name "${{ vars.API_FUNCTION_NAME }}" --image-uri "${{ steps.image.outputs.uri }}" > /dev/null
+          aws lambda wait function-updated-v2 --function-name "${{ vars.API_FUNCTION_NAME }}"
+
+      - name: Smoke test
+        run: sh infra/smoke.sh "${{ vars.DOMAIN }}"

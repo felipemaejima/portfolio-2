@@ -1,0 +1,4 @@
+# Copy to terraform.tfvars (git-ignored) and fill in.
+domain            = "example.info"
+github_repository = "felipemaejima/portfolio-2"
+alert_email       = "you@example.com"
