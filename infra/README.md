@@ -28,6 +28,14 @@ A root tem poder total sobre a conta (inclusive fechá-la) e não pode ser restr
 ### 1. Acesso à conta (IAM Identity Center)
 Credenciais temporárias via SSO em vez de access keys de longa duração.
 
+> **Atenção — créditos do Free Tier:** dar acesso SSO a uma conta exige que o Identity Center rode numa **AWS
+> Organization**, e criar ou entrar numa Organization **expira imediatamente os créditos do Free Tier** e torna a
+> conta inelegível a novos ([FAQ do Free Tier](https://aws.amazon.com/free/free-tier-faqs/)). Neste projeto isso
+> aconteceu (~US$ 65 restantes expiraram). Se a conta ainda tem créditos que você quer usar, prefira o `aws login`
+> (credenciais temporárias para a CLI a partir do login no console, com MFA, sem access keys e sem Organization) e
+> adapte os targets `aws-configure`/`aws-login`. Créditos expirados assim podem ser pedidos de volta num caso de
+> *Account and billing* no AWS Support (gratuito), sem garantia.
+
 1. No console AWS, na região `us-east-1`, ative o **IAM Identity Center**, crie seu usuário (você recebe um e-mail
    para definir a senha e o MFA) e atribua a ele o permission set `AdministratorAccess` nesta conta.
    Anote a **AWS access portal URL** (algo como `https://d-xxxxxxxxxx.awsapps.com/start`).
