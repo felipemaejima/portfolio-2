@@ -15,6 +15,28 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    # Ready = dependencies installed, migrations applied and the app answering (the web service waits for it).
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 5s
+      retries: 60
+      start_period: 120s
+
+  # Vite dev server. Same toolchain image as the api (Node + pnpm); it proxies /api and /uploads to the api
+  # service, so the browser sees a single origin, exactly like CloudFront in production.
+  web:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: dev
+    command: pnpm --filter web dev
+    ports:
+      - "${WEB_PORT:-5173}:5173"
+    volumes:
+      - .:/app
+    depends_on:
+      api:
+        condition: service_healthy
 
   db:
     image: postgres:18-alpine
