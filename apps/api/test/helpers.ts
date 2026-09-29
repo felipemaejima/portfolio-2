@@ -24,7 +24,7 @@ export async function resetDb(app: NestExpressApplication) {
   await app
     .get(PrismaService)
     .$executeRawUnsafe(
-      'TRUNCATE "Admin", "Profile", "SocialLink", "SkillCategory", "Skill", "Project", "Experience", "Education", "Service", "Media", "ContactMessage" CASCADE',
+      'TRUNCATE "Admin", "Profile", "SocialLink", "SkillCategory", "Skill", "Project", "Experience", "Education", "Service", "Media", "ContactMessage", "RateLimit" CASCADE',
     );
 }
 
@@ -35,7 +35,7 @@ export async function createAdmin(app: NestExpressApplication) {
 /** Fresh admin + access token. */
 export async function adminToken(app: NestExpressApplication) {
   await createAdmin(app);
-  const res = await request(app.getHttpServer()).post('/auth/login').send(ADMIN).expect(200);
+  const res = await request(app.getHttpServer()).post('/api/auth/login').send(ADMIN).expect(200);
   return res.body.accessToken as string;
 }
 

@@ -1,6 +1,7 @@
-import { Body, Controller, Module, NotImplementedException, Post } from '@nestjs/common';
+import { Body, Controller, Module, NotImplementedException, Post, UseGuards } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
+import { ClientIpThrottlerGuard } from '../common/client-ip-throttler.guard';
 import { IsEmail, IsNotEmpty, IsString, MaxLength } from 'class-validator';
 import { Public } from '../common/public.decorator';
 
@@ -26,6 +27,7 @@ export class ContactDto {
 @Controller('contact')
 export class ContactController {
   @Post()
+  @UseGuards(ClientIpThrottlerGuard)
   @Throttle({ default: { limit: 3, ttl: 60_000 } })
   send(@Body() _dto: ContactDto): never {
     throw new NotImplementedException('Contact channel not implemented yet');

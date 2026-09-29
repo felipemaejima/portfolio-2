@@ -1,7 +1,16 @@
 node_modules/
+.pnpm-store/
 dist/
 coverage/
 .env
 uploads/
 *.log
 apps/api/src/generated/
+# Terraform: provider cache, local state (bootstrap) and real variable values. Lock files ARE committed.
+.terraform/
+*.tfstate
+*.tfstate.*
+infra/main/terraform.tfvars
+infra/main/.build/
+# Database dumps (restore procedure) never belong in git.
+*.dump

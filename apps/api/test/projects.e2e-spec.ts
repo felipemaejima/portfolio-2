@@ -18,13 +18,13 @@ describe('project listing filters', () => {
       { title: lt('CLI interna'), description: lt('Ferramenta'), tags: ['Go'], visible: false },
     ];
     for (const project of projects) {
-      await http.post('/admin/projects').set('Authorization', auth).send(project).expect(201);
+      await http.post('/api/admin/projects').set('X-Authorization', auth).send(project).expect(201);
     }
   });
   afterAll(() => app.close());
 
   const titles = async (query: string) => {
-    const { body } = await http.get(`/projects?${query}`).expect(200);
+    const { body } = await http.get(`/api/projects?${query}`).expect(200);
     return body.items.map((p: { title: string }) => p.title);
   };
 
@@ -49,13 +49,13 @@ describe('project listing filters', () => {
 
   it('sorts and paginates', async () => {
     expect(await titles('sort=-createdAt')).toEqual(['Painel', 'Integração de pagamentos']);
-    const { body } = await http.get('/projects?pageSize=1&page=2').expect(200);
+    const { body } = await http.get('/api/projects?pageSize=1&page=2').expect(200);
     expect(body).toMatchObject({ total: 2, page: 2, pageSize: 1, items: [{ title: 'Painel' }] });
-    await http.get('/projects?pageSize=51').expect(400);
+    await http.get('/api/projects?pageSize=51').expect(400);
   });
 
   it('lets the admin see and filter hidden projects', async () => {
-    const { body } = await http.get('/admin/projects?visible=false').set('Authorization', auth).expect(200);
+    const { body } = await http.get('/api/admin/projects?visible=false').set('X-Authorization', auth).expect(200);
     expect(body.items.map((p: { title: { pt: string } }) => p.title.pt)).toEqual(['CLI interna']);
   });
 });

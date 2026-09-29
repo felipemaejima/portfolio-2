@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  Body,
   Controller,
   Delete,
   Get,
@@ -8,29 +9,31 @@ import {
   ParseUUIDPipe,
   Post,
   Query,
-  UploadedFile,
-  UseInterceptors,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
-import { ApiBearerAuth, ApiBody, ApiConsumes, ApiTags } from '@nestjs/swagger';
+import { ApiBody, ApiConsumes, ApiSecurity, ApiTags } from '@nestjs/swagger';
+import { ADMIN_AUTH } from '../auth/auth.guard';
 import { MediaQuery } from './media.dto';
-import { MediaService } from './media.service';
+import { MEDIA_MIMES, MediaService } from './media.service';
 
-const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+// Lambda caps synchronous payloads at 6 MB and binaries travel base64-encoded (+33%).
+export const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
 
 @ApiTags('admin/media')
-@ApiBearerAuth()
+@ApiSecurity(ADMIN_AUTH)
 @Controller('admin')
 export class MediaController {
   constructor(private readonly media: MediaService) {}
 
+  /**
+   * The request body is the file itself (e.g. `Content-Type: image/png`), not multipart: behind CloudFront OAC the
+   * client must send the body's SHA-256, easy for raw bytes. The stored type still comes from the magic bytes.
+   */
   @Post('uploads')
-  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_UPLOAD_BYTES, files: 1 } }))
-  @ApiConsumes('multipart/form-data')
-  @ApiBody({ schema: { type: 'object', required: ['file'], properties: { file: { type: 'string', format: 'binary' } } } })
-  upload(@UploadedFile() file?: Express.Multer.File) {
-    if (!file) throw new BadRequestException('file is required');
-    return this.media.upload(file.buffer);
+  @ApiConsumes(...MEDIA_MIMES)
+  @ApiBody({ schema: { type: 'string', format: 'binary' } })
+  upload(@Body() body: unknown) {
+    if (!Buffer.isBuffer(body) || !body.length) throw new BadRequestException('Send the image bytes as the request body');
+    return this.media.upload(body);
   }
 
   @Get('media')

@@ -153,3 +153,10 @@ model ContactMessage {
   readAt    DateTime?
   createdAt DateTime  @default(now())
 }
+
+// Fixed-window counters of the rate limiter, shared by every API instance (Lambda instances share no memory).
+model RateLimit {
+  key       String   @id
+  hits      Int
+  expiresAt DateTime
+}

@@ -69,7 +69,7 @@
         },
         "security": [
           {
-            "bearer": []
+            "admin": []
           }
         ],
         "summary": "Ends every session of the admin (all refresh tokens stop working).",
@@ -99,7 +99,7 @@
         },
         "security": [
           {
-            "bearer": []
+            "admin": []
           }
         ],
         "summary": "Also ends every session.",
@@ -115,18 +115,22 @@
         "requestBody": {
           "required": true,
           "content": {
-            "multipart/form-data": {
+            "image/jpeg": {
               "schema": {
-                "type": "object",
-                "required": [
-                  "file"
-                ],
-                "properties": {
-                  "file": {
-                    "type": "string",
-                    "format": "binary"
-                  }
-                }
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/webp": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
               }
             }
           }
@@ -138,9 +142,10 @@
         },
         "security": [
           {
-            "bearer": []
+            "admin": []
           }
         ],
+        "summary": "The request body is the file itself (e.g. `Content-Type: image/png`), not multipart: behind CloudFront OAC the\nclient must send the body's SHA-256, easy for raw bytes. The stored type still comes from the magic bytes.",
         "tags": [
           "admin/media"
         ]
@@ -187,7 +192,7 @@
         },
         "security": [
           {
-            "bearer": []
+            "admin": []
           }
         ],
         "tags": [
@@ -215,7 +220,7 @@
         },
         "security": [
           {
-            "bearer": []
+            "admin": []
           }
         ],
         "tags": [
@@ -234,7 +239,7 @@
         },
         "security": [
           {
-            "bearer": []
+            "admin": []
           }
         ],
         "tags": [
@@ -261,7 +266,7 @@
         },
         "security": [
           {
-            "bearer": []
+            "admin": []
           }
         ],
         "tags": [
@@ -287,7 +292,7 @@
         },
         "security": [
           {
-            "bearer": []
+            "admin": []
           }
         ],
         "tags": [
@@ -314,7 +319,7 @@
         },
         "security": [
           {
-            "bearer": []
+            "admin": []
           }
         ],
         "tags": [
@@ -343,7 +348,7 @@
         },
         "security": [
           {
-            "bearer": []
+            "admin": []
           }
         ],
         "tags": [
@@ -371,7 +376,7 @@
         },
         "security": [
           {
-            "bearer": []
+            "admin": []
           }
         ],
         "tags": [
@@ -407,7 +412,7 @@
         },
         "security": [
           {
-            "bearer": []
+            "admin": []
           }
         ],
         "tags": [
@@ -433,7 +438,7 @@
         },
         "security": [
           {
-            "bearer": []
+            "admin": []
           }
         ],
         "tags": [
@@ -459,7 +464,7 @@
         },
         "security": [
           {
-            "bearer": []
+            "admin": []
           }
         ],
         "tags": [
@@ -486,7 +491,7 @@
         },
         "security": [
           {
-            "bearer": []
+            "admin": []
           }
         ],
         "tags": [
@@ -515,7 +520,7 @@
         },
         "security": [
           {
-            "bearer": []
+            "admin": []
           }
         ],
         "tags": [
@@ -543,7 +548,7 @@
         },
         "security": [
           {
-            "bearer": []
+            "admin": []
           }
         ],
         "tags": [
@@ -579,7 +584,7 @@
         },
         "security": [
           {
-            "bearer": []
+            "admin": []
           }
         ],
         "tags": [
@@ -605,7 +610,7 @@
         },
         "security": [
           {
-            "bearer": []
+            "admin": []
           }
         ],
         "tags": [
@@ -641,7 +646,7 @@
         },
         "security": [
           {
-            "bearer": []
+            "admin": []
           }
         ],
         "tags": [
@@ -668,7 +673,7 @@
         },
         "security": [
           {
-            "bearer": []
+            "admin": []
           }
         ],
         "tags": [
@@ -697,7 +702,7 @@
         },
         "security": [
           {
-            "bearer": []
+            "admin": []
           }
         ],
         "tags": [
@@ -725,7 +730,7 @@
         },
         "security": [
           {
-            "bearer": []
+            "admin": []
           }
         ],
         "tags": [
@@ -761,7 +766,7 @@
         },
         "security": [
           {
-            "bearer": []
+            "admin": []
           }
         ],
         "tags": [
@@ -787,7 +792,7 @@
         },
         "security": [
           {
-            "bearer": []
+            "admin": []
           }
         ],
         "tags": [
@@ -960,7 +965,7 @@
         },
         "security": [
           {
-            "bearer": []
+            "admin": []
           }
         ],
         "tags": [
@@ -987,7 +992,7 @@
         },
         "security": [
           {
-            "bearer": []
+            "admin": []
           }
         ],
         "tags": [
@@ -1016,7 +1021,7 @@
         },
         "security": [
           {
-            "bearer": []
+            "admin": []
           }
         ],
         "tags": [
@@ -1044,7 +1049,7 @@
         },
         "security": [
           {
-            "bearer": []
+            "admin": []
           }
         ],
         "tags": [
@@ -1080,7 +1085,7 @@
         },
         "security": [
           {
-            "bearer": []
+            "admin": []
           }
         ],
         "tags": [
@@ -1106,7 +1111,7 @@
         },
         "security": [
           {
-            "bearer": []
+            "admin": []
           }
         ],
         "tags": [
@@ -1142,7 +1147,7 @@
         },
         "security": [
           {
-            "bearer": []
+            "admin": []
           }
         ],
         "tags": [
@@ -1169,7 +1174,7 @@
         },
         "security": [
           {
-            "bearer": []
+            "admin": []
           }
         ],
         "tags": [
@@ -1198,7 +1203,7 @@
         },
         "security": [
           {
-            "bearer": []
+            "admin": []
           }
         ],
         "tags": [
@@ -1226,7 +1231,7 @@
         },
         "security": [
           {
-            "bearer": []
+            "admin": []
           }
         ],
         "tags": [
@@ -1262,7 +1267,7 @@
         },
         "security": [
           {
-            "bearer": []
+            "admin": []
           }
         ],
         "tags": [
@@ -1288,7 +1293,7 @@
         },
         "security": [
           {
-            "bearer": []
+            "admin": []
           }
         ],
         "tags": [
@@ -1337,7 +1342,7 @@
         },
         "security": [
           {
-            "bearer": []
+            "admin": []
           }
         ],
         "tags": [
@@ -1364,7 +1369,7 @@
         },
         "security": [
           {
-            "bearer": []
+            "admin": []
           }
         ],
         "tags": [
@@ -1393,7 +1398,7 @@
         },
         "security": [
           {
-            "bearer": []
+            "admin": []
           }
         ],
         "tags": [
@@ -1421,7 +1426,7 @@
         },
         "security": [
           {
-            "bearer": []
+            "admin": []
           }
         ],
         "tags": [
@@ -1457,7 +1462,7 @@
         },
         "security": [
           {
-            "bearer": []
+            "admin": []
           }
         ],
         "tags": [
@@ -1483,7 +1488,7 @@
         },
         "security": [
           {
-            "bearer": []
+            "admin": []
           }
         ],
         "tags": [
@@ -1509,7 +1514,7 @@
         },
         "security": [
           {
-            "bearer": []
+            "admin": []
           }
         ],
         "tags": [
@@ -1536,7 +1541,7 @@
         },
         "security": [
           {
-            "bearer": []
+            "admin": []
           }
         ],
         "tags": [
@@ -1565,7 +1570,7 @@
         },
         "security": [
           {
-            "bearer": []
+            "admin": []
           }
         ],
         "tags": [
@@ -1593,7 +1598,7 @@
         },
         "security": [
           {
-            "bearer": []
+            "admin": []
           }
         ],
         "tags": [
@@ -1629,7 +1634,7 @@
         },
         "security": [
           {
-            "bearer": []
+            "admin": []
           }
         ],
         "tags": [
@@ -1655,7 +1660,7 @@
         },
         "security": [
           {
-            "bearer": []
+            "admin": []
           }
         ],
         "tags": [
@@ -1722,6 +1727,20 @@
           "public"
         ]
       }
+    },
+    "/health": {
+      "get": {
+        "operationId": "HealthController_check",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "public"
+        ]
+      }
     }
   },
   "info": {
@@ -1734,10 +1753,11 @@
   "servers": [],
   "components": {
     "securitySchemes": {
-      "bearer": {
-        "scheme": "bearer",
-        "bearerFormat": "JWT",
-        "type": "http"
+      "admin": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-authorization",
+        "description": "Bearer <access token>"
       },
       "cookie": {
         "type": "apiKey",
