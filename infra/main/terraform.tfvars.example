@@ -1,0 +1,10 @@
+# Copy to terraform.tfvars (git-ignored) and fill in.
+domain            = "example.info"
+github_repository = "felipemaejima/portfolio-2"
+# Public numeric IDs (GitHub OIDC subjects use them): curl -s https://api.github.com/repos/<owner>/<repo>
+github_owner_id      = 0
+github_repository_id = 0
+alert_email       = "you@example.com"
+
+# Only if the apply fails with "Limit exceeded on dimensional spend monitor creation" (see infra/README.md):
+# existing_anomaly_monitor_arn = "arn:aws:ce::<account>:anomalymonitor/<id>"
