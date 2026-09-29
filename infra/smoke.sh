@@ -18,7 +18,7 @@ header() { # <header name> <curl args...>: value of a response header ('' if abs
 
 check "api health (app + database)"      200 "$(status "$API/health")"
 check "public portfolio"                 200 "$(status "$API/portfolio")"
-check "public GET cacheable at the edge" "public, max-age=60" "$(header cache-control "$API/portfolio")"
+check "public GET cacheable by browsers" "public, max-age=60" "$(header cache-control "$API/portfolio")"
 check "admin requires a token"           401 "$(status "$API/admin/profile")"
 check "admin responses never cached"     "no-store" "$(header cache-control "$API/admin/profile")"
 check "swagger hidden in production"     404 "$(status "$API/docs")"

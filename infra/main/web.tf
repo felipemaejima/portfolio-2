@@ -35,11 +35,12 @@ data "aws_cloudfront_cache_policy" "optimized" {
   name = "Managed-CachingOptimized"
 }
 
-# Caches only what the API marks cacheable (public GETs: max-age=60); default TTL 0 means everything else, including
-# every admin response (Cache-Control: no-store), goes to the origin.
-data "aws_cloudfront_cache_policy" "origin_headers" {
-  # By ID: unlike the older managed policies, this one has no "Managed-" prefix in its name.
-  id = "4cc15a8a-d715-48a4-82b8-cc0b614638fe" # UseOriginCacheControlHeaders-QueryStrings
+# No edge caching for the API. Headers in a cache key are always forwarded to the origin, and every managed policy
+# that honors the origin's Cache-Control keys on `Host`: the Function URL would receive the site's Host in a request
+# CloudFront signed for the Lambda host, and reject it (403 AccessDeniedException). The Free plan allows only managed
+# policies, so the API goes uncached; public GETs still send max-age=60, which browsers honor.
+data "aws_cloudfront_cache_policy" "api" {
+  id = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad" # Managed-CachingDisabled
 }
 
 # Everything but Host (the Function URL must see its own hostname), so cookies, query strings and X-Authorization
@@ -109,7 +110,7 @@ resource "aws_cloudfront_distribution" "site" {
     allowed_methods            = ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"]
     cached_methods             = ["GET", "HEAD"]
     compress                   = true
-    cache_policy_id            = data.aws_cloudfront_cache_policy.origin_headers.id
+    cache_policy_id            = data.aws_cloudfront_cache_policy.api.id
     origin_request_policy_id   = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
     response_headers_policy_id = data.aws_cloudfront_response_headers_policy.security.id
 

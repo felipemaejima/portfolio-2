@@ -22,7 +22,7 @@ A API (ver `backend.md`) e o futuro front em React só rodam localmente em Docke
 - **Banco**: **Neon** (Postgres serverless, AWS `us-east-1`), plano gratuito — sem cobrança possível.
 - **DNS e certificado**: Route 53 + ACM, coberto pelo plano. Tudo em **Terraform**, executado via Docker.
 - **CI/CD**: GitHub Actions por **OIDC** (sem chaves AWS guardadas): testa, publica a imagem no ECR, migra o Neon, atualiza a Lambda e faz smoke test.
-- **Defesa de custo em camadas**: WAF (rate limit por IP + regras gerenciadas) → cache na borda dos GETs públicos → origens inacessíveis sem o CloudFront → **disjuntor** que desliga a API se o orçamento estourar.
+- **Defesa de custo em camadas**: WAF (rate limit por IP + regras gerenciadas) → origens inacessíveis sem o CloudFront → **disjuntor** que desliga a API se o orçamento estourar.
 - **Operação**: Budgets, Cost Anomaly Detection, alarme de 5xx, backup diário do banco no S3.
 - Custo esperado: **~US$ 0–1/mês** (o plano cobre CloudFront, WAF e Route 53).
 
@@ -108,7 +108,7 @@ A API (ver `backend.md`) e o futuro front em React só rodam localmente em Docke
 - **Comportamentos**:
   - padrão → bucket do web, cache otimizado, **CloudFront Function** de rewrite do SPA (rotas sem extensão → `index.html`). Por quê não "custom error responses": valeriam para a distribuição inteira e transformariam um upload inexistente em página do SPA com status 200.
   - `/uploads/*` → bucket de uploads (objetos sob o prefixo `uploads/`), cache longo (keys UUID imutáveis).
-  - `/api/*` → Function URL da Lambda, todos os métodos, política `UseOriginCacheControlHeaders-QueryStrings` (cacheia só o que a API marca como cacheável; TTL padrão 0), origin request `AllViewerExceptHostHeader` (a Function URL precisa ver o próprio host) e uma **CloudFront Function que grava o IP real do visitante** em `x-viewer-ip`, sobrescrevendo qualquer valor enviado pelo cliente.
+  - `/api/*` → Function URL da Lambda, todos os métodos, política de cache `CachingDisabled`, origin request `AllViewerExceptHostHeader` (a Function URL precisa ver o próprio host). **Sem cache na borda para a API**: headers da chave de cache são sempre repassados à origem, e todas as políticas gerenciadas que respeitam o `Cache-Control` da origem incluem `Host` na chave — a Function URL receberia o `Host` do site numa requisição assinada para o host da Lambda e recusaria (403 `AccessDeniedException`, observado no primeiro deploy). Política customizada sem `Host` exige plano pago e uma **CloudFront Function que grava o IP real do visitante** em `x-viewer-ip`, sobrescrevendo qualquer valor enviado pelo cliente.
 - **Origens privadas por OAC**: buckets e Function URL só respondem a requisições assinadas por esta distribuição. O CloudFront tem `s3:ListBucket` para que chaves inexistentes respondam 404 (não 403); ele nunca lista.
 - **Cabeçalhos de segurança** pela política gerenciada `SecurityHeadersPolicy` (HSTS, nosniff, frame options, referrer policy). A CSP vem do próprio `apps/web`, como `<meta>` gerada no build (o plano Free não aceita política de cabeçalhos customizada).
 - `PriceClass_All`: só ela inclui edges na América do Sul.
@@ -121,7 +121,7 @@ A API (ver `backend.md`) e o futuro front em React só rodam localmente em Docke
 3. **Common Rule Set** (OWASP), com a regra de tamanho de corpo (8 KB) só contando — uploads têm até 4 MB.
 4. **Known Bad Inputs** (Log4j e afins).
 - **Sem rate limit por caminho na borda**: o tier Free recusa statements que inspecionam a requisição (*byte match*), necessários para restringir a regra a `/api/auth/*` (verificado no console ao assinar o plano: "configuration not available in this tier: byte match"). O brute force de login/refresh fica limitado por IP na própria API (contadores no Postgres). Com o plano Pro, a regra específica volta a ser possível.
-- Limitação conhecida: um ataque distribuído (muitos IPs, cada um abaixo do limite) passa pelo rate limit; aí entram o cache na borda, a franquia sem excedente e o disjuntor.
+- Limitação conhecida: um ataque distribuído (muitos IPs, cada um abaixo do limite) passa pelo rate limit; aí entram a franquia sem excedente e o disjuntor (alarme de compute em minutos).
 
 ### API — Lambda + Function URL (sem API Gateway)
 - **Lambda com imagem de contêiner**, **arm64** (Graviton), 1024 MB (CPU escala com memória), timeout 15 s, sem provisioned concurrency.
@@ -141,7 +141,7 @@ A API (ver `backend.md`) e o futuro front em React só rodam localmente em Docke
 - **Prefixo global `/api`** em todos os ambientes (local e produção usam os mesmos caminhos; Swagger em `/api/docs` fora de produção; cookie de refresh em `/api/auth/refresh`).
 - **Token em `X-Authorization`** (ver acima); Swagger documenta o esquema.
 - **Upload com o arquivo cru no corpo** (`Content-Type: image/*`), limite **4 MB** (payload da Lambda é 6 MB e binários trafegam em base64, +33%). O tipo real continua vindo dos magic bytes.
-- **Cache**: toda resposta da API sai com `Cache-Control: no-store`, exceto GETs públicos (`/api/portfolio`, `/api/projects`, `/api/cv`) com `public, max-age=60` — um flood da mesma URL é respondido pela borda sem invocar a Lambda; nada do admin é cacheado.
+- **Cache**: toda resposta da API sai com `Cache-Control: no-store`, exceto GETs públicos (`/api/portfolio`, `/api/projects`, `/api/cv`) com `public, max-age=60`, respeitado pelos navegadores (a borda não cacheia a API, ver CloudFront); nada do admin é cacheado.
 - **IP do cliente** para rate limit vem de um header confiável configurável (`CLIENT_IP_HEADER=x-viewer-ip` em produção; socket local em dev). `TRUST_PROXY`/`X-Forwarded-For` deixam de ser usados: as entradas iniciais do XFF são do cliente.
 - **Driver S3 do storage** (`STORAGE_DRIVER=s3`), com credenciais da role da Lambda (sem chaves em env). O banco guarda só a key; a URL pública vem de `UPLOADS_PUBLIC_URL`.
 - **Endpoint `GET /api/health`** público (app + `SELECT 1`); usado só pelo smoke test (sem sonda periódica, para o Neon hibernar).

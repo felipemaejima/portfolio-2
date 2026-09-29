@@ -34,7 +34,7 @@ Opções avaliadas para a API:
 
 ## Consequências
 
-- Custo praticamente zero em repouso e **limitado sob ataque**: a borda absorve (WAF, cache, plano fixo), a origem não
+- Custo praticamente zero em repouso e **limitado sob ataque**: a borda absorve (WAF, plano fixo), a origem não
   pode ser contornada, e o disjuntor corta o que sobrar.
 - A mesma imagem roda localmente, no Lambda e, se preciso, em ECS.
 - Clientes da API seguem um contrato próprio: `x-amz-content-sha256` em requisições com corpo, token em

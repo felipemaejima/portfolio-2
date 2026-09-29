@@ -166,7 +166,9 @@ fora para dentro:
 1. **WAF** (no plano): reputação de IP, rate limit geral por IP, regras gerenciadas. O Free não permite limitar por
    caminho (*byte match*); o brute force de login é limitado por IP na própria API.
 2. **Plano de preço fixo**: tráfego acima da franquia não é cobrado; bloqueios nem contam.
-3. **Cache na borda**: GETs públicos da API ficam 60 s no CloudFront — um flood da mesma URL não invoca a Lambda.
+3. **Sem cache de API na borda**: no plano Free, todas as políticas de cache que respeitam o `Cache-Control` da API
+   repassam o `Host` do site à Lambda e quebram a assinatura do OAC; a API fica sem cache no CloudFront (os
+   navegadores ainda guardam os GETs públicos por 60 s). O disjuntor cobre esse custo.
 4. **Origens privadas**: S3 e a Function URL só aceitam requisições assinadas pela distribuição (OAC); ninguém
    contorna o WAF.
 5. **Disjuntor**: a concorrência da API vai a zero automaticamente se ela consumir mais de 90 s de compute em
