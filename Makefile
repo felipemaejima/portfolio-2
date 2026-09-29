@@ -9,7 +9,7 @@ TEST_DB := postgresql://portfolio:portfolio@db-test:5432/portfolio_test
 AWS_PROFILE ?= portfolio
 SSM_PREFIX  := /portfolio/prod
 TTY         := $(shell [ -t 0 ] && echo -t)
-CLOUD_BASE  := docker run --rm -i -u $(shell id -u):$(shell id -g) -e HOME=/home/app -e CHECKPOINT_DISABLE=1 \
+CLOUD_BASE  := docker run --rm -i -u $(shell id -u):$(shell id -g) -e HOME=/home/app -e CHECKPOINT_DISABLE=1 -e AWS_PAGER= \
                -v $(HOME)/.aws:/home/app/.aws -v $(CURDIR):/work -w /work
 CLOUD_RAW   := $(CLOUD_BASE) -e AWS_PROFILE=$(AWS_PROFILE)
 CLOUD       := $(CLOUD_RAW) $(TTY)
@@ -22,7 +22,7 @@ TF_BOOT     := $(CLOUD) hashicorp/terraform:1.16.4 -chdir=infra/bootstrap
 
 .DEFAULT_GOAL := help
 
-.PHONY: help up down logs sh install migrate migration seed studio test lint openapi build reset-db \
+.PHONY: help up down logs sh install migrate migration seed studio test lint openapi build test-web reset-db \
         aws-configure aws-login tf-bootstrap tf-init tf-plan tf-apply aws tf tf-fmt ci-lint db-secrets seed-prod api-publish plan-subscribe api-enable smoke
 
 help: ## list available commands
@@ -31,14 +31,14 @@ help: ## list available commands
 .env:
 	cp .env.example .env
 
-up: .env ## start dev stack (api with hot reload + postgres)
+up: .env ## start dev stack: site/admin on WEB_PORT (5173), api with hot reload, postgres
 	$(COMPOSE) up -d --build
 
 down: ## stop all containers (volumes are kept)
 	$(COMPOSE) --profile test down
 
-logs: ## follow api logs
-	$(COMPOSE) logs -f api
+logs: ## follow api and web logs
+	$(COMPOSE) logs -f api web
 
 sh: ## shell inside the api container
 	$(API) sh
@@ -63,8 +63,11 @@ test: ## e2e suite against the throwaway db-test (args: make test t=<pattern>)
 	$(COMPOSE) --profile test up -d --wait db-test
 	$(API) sh -c "export DATABASE_URL=$(TEST_DB) && pnpm --filter api exec prisma migrate deploy && pnpm --filter api test $(t)"
 
-lint: ## typecheck + oxlint
-	$(PNPM) lint
+lint: ## typecheck + oxlint (api and web)
+	$(API) pnpm -r lint
+
+test-web: ## web unit tests (API client contract)
+	$(API) pnpm --filter web test
 
 openapi: ## export apps/api/openapi.json
 	$(PNPM) openapi
@@ -83,7 +86,7 @@ $(HOME)/.aws:
 
 # SSO uses the device-code flow: the default flow waits for a browser callback on localhost *inside* the container.
 aws-configure: $(HOME)/.aws ## one-time: create the SSO profile (name it "portfolio")
-	$(CLOUD_BASE) $(TTY) amazon/aws-cli:2.37.4 configure sso --use-device-code configure sso --profile $(AWS_PROFILE)
+	$(CLOUD_BASE) $(TTY) amazon/aws-cli:2.37.4 configure sso --use-device-code
 
 aws-login: $(HOME)/.aws ## start an SSO session (prints a URL + code to open in the browser)
 	$(AWS) sso login --use-device-code
@@ -127,9 +130,10 @@ db-secrets: $(HOME)/.aws ## store the Neon connection strings in SSM (typed, nev
 api-publish: $(HOME)/.aws ## build the arm64 image and push it to ECR (first deploy / manual fallback; CI does this normally)
 	docker run --privileged --rm tonistiigi/binfmt --install arm64 >/dev/null
 	@# Tags are immutable in ECR: a timestamp keeps re-publishing the same commit possible.
+	@# No provenance/SBOM attestations: they turn the push into an image index, which Lambda rejects.
 	@REPO=$$($(TF_RAW) output -raw ecr_repository_url) && TAG=manual-$$(git rev-parse --short HEAD)-$$(date +%s) && \
 	$(AWS_RAW) ecr get-login-password | docker login --username AWS --password-stdin $${REPO%%/*} && \
-	docker buildx build --platform linux/arm64 -f apps/api/Dockerfile --target prod -t $$REPO:$$TAG --push . && \
+	docker buildx build --platform linux/arm64 --provenance=false --sbom=false -f apps/api/Dockerfile --target prod -t $$REPO:$$TAG --push . && \
 	echo "Pushed $$REPO:$$TAG"
 
 plan-subscribe: $(HOME)/.aws ## one-time: put CloudFront (+ WAF + hosted zone) on the Free flat-rate plan — no overage charges

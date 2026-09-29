@@ -1,11 +1,12 @@
 # All buckets are private. New buckets already default to SSE-S3 encryption and BucketOwnerEnforced; the public
 # access block is made explicit anyway (defense in depth, visible in review).
+# Values become the `purpose` tag: S3 tags only allow letters, digits, spaces and + - = . _ : / @.
 locals {
   buckets = {
-    web     = "Built SPA files, served by CloudFront"
-    uploads = "Admin uploads (objects under uploads/), served by CloudFront at /uploads/*"
+    web     = "SPA build served by CloudFront"
+    uploads = "Admin uploads under uploads/ served by CloudFront at /uploads/"
     backups = "Daily pg_dump of the Neon database"
-    audit   = "CloudTrail logs (management events)"
+    audit   = "CloudTrail management event logs"
   }
 }
 

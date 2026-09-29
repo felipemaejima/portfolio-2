@@ -3,13 +3,14 @@ resource "aws_sns_topic" "alerts" {
 }
 
 # Who may publish: CloudWatch alarms and the Access Analyzer EventBridge rule (audit.tf) of this account.
-# (A custom policy replaces the default one, so each service publisher must be listed.)
+# (A custom policy replaces the default one, so each service publisher must be listed; SNS requires a unique Sid each.)
 resource "aws_sns_topic_policy" "alerts" {
   arn = aws_sns_topic.alerts.arn
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
+        Sid       = "CloudWatchAlarms"
         Effect    = "Allow"
         Principal = { Service = "cloudwatch.amazonaws.com" }
         Action    = "SNS:Publish"
@@ -17,6 +18,7 @@ resource "aws_sns_topic_policy" "alerts" {
         Condition = { ArnLike = { "aws:SourceArn" = "arn:aws:cloudwatch:us-east-1:${local.account_id}:alarm:*" } }
       },
       {
+        Sid       = "AccessAnalyzerFindings"
         Effect    = "Allow"
         Principal = { Service = "events.amazonaws.com" }
         Action    = "SNS:Publish"
@@ -97,8 +99,16 @@ resource "aws_budgets_budget" "monthly" {
   }
 }
 
-# New accounts may already have AWS's default services monitor, and only one such monitor is allowed. If the
-# apply fails with a limit error, import it instead: `terraform import aws_ce_anomaly_monitor.services <arn>`.
+# New accounts may already have AWS's default services monitor, and only one such monitor is allowed. Then its ARN
+# goes in `existing_anomaly_monitor_arn` and the import block below adopts it. (A config-driven import runs inside
+# plan/apply; the `terraform import` CLI evaluates the whole config against the current state and breaks when a
+# previous apply stopped halfway.)
+import {
+  for_each = var.existing_anomaly_monitor_arn == null ? [] : [var.existing_anomaly_monitor_arn]
+  to       = aws_ce_anomaly_monitor.services
+  id       = each.value
+}
+
 resource "aws_ce_anomaly_monitor" "services" {
   name              = "${local.name}-services"
   monitor_type      = "DIMENSIONAL"
@@ -141,6 +151,7 @@ resource "aws_sns_topic_policy" "kill_switch" {
     Version = "2012-10-17"
     Statement = [
       {
+        Sid       = "BudgetExceeded"
         Effect    = "Allow"
         Principal = { Service = "budgets.amazonaws.com" }
         Action    = "SNS:Publish"
@@ -148,6 +159,7 @@ resource "aws_sns_topic_policy" "kill_switch" {
         Condition = { StringEquals = { "aws:SourceAccount" = local.account_id } }
       },
       {
+        Sid       = "ComputeRunawayAlarm"
         Effect    = "Allow"
         Principal = { Service = "cloudwatch.amazonaws.com" }
         Action    = "SNS:Publish"

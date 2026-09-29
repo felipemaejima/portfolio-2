@@ -38,7 +38,8 @@ data "aws_cloudfront_cache_policy" "optimized" {
 # Caches only what the API marks cacheable (public GETs: max-age=60); default TTL 0 means everything else, including
 # every admin response (Cache-Control: no-store), goes to the origin.
 data "aws_cloudfront_cache_policy" "origin_headers" {
-  name = "Managed-UseOriginCacheControlHeaders-QueryStrings"
+  # By ID: unlike the older managed policies, this one has no "Managed-" prefix in its name.
+  id = "4cc15a8a-d715-48a4-82b8-cc0b614638fe" # UseOriginCacheControlHeaders-QueryStrings
 }
 
 # Everything but Host (the Function URL must see its own hostname), so cookies, query strings and X-Authorization

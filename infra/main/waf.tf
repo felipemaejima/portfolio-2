@@ -1,6 +1,7 @@
 # WAF in front of everything (site, API, uploads). The Free flat-rate plan includes it — web ACL, rules and request
 # fees — with at most 5 rules; requests it blocks don't count toward the plan's usage allowance.
-# Rate limits are per viewer IP over a 5-minute window; the API also keeps its own per-IP limits on sensitive routes.
+# The Free tier rejects request-matching statements ("byte match"), so rate limits can't be scoped to a path: one
+# per-IP limit covers everything, and login/refresh brute force is limited per IP by the API itself (Postgres counters).
 locals {
   managed_rule_groups = {
     # Known malicious IPs (botnets, scanners). Cheapest check first.
@@ -11,10 +12,8 @@ locals {
     known-bad-inputs = { priority = 4, name = "AWSManagedRulesKnownBadInputsRuleSet", count_only = [] }
   }
   rate_limits = {
-    # Brute force on login/refresh: far below what a human needs.
-    rate-limit-auth = { priority = 1, limit = 20, path_prefix = "/api/auth/" }
     # HTTP flood from a single IP; a page view costs ~10-20 requests.
-    rate-limit-all = { priority = 2, limit = 1000, path_prefix = null }
+    rate-limit-all = { priority = 1, limit = 1000 }
   }
 }
 
@@ -39,23 +38,6 @@ resource "aws_wafv2_web_acl" "site" {
           limit                 = rule.value.limit
           evaluation_window_sec = 300
           aggregate_key_type    = "IP"
-
-          dynamic "scope_down_statement" {
-            for_each = rule.value.path_prefix == null ? [] : [rule.value.path_prefix]
-            content {
-              byte_match_statement {
-                search_string         = scope_down_statement.value
-                positional_constraint = "STARTS_WITH"
-                field_to_match {
-                  uri_path {}
-                }
-                text_transformation {
-                  priority = 0
-                  type     = "NONE"
-                }
-              }
-            }
-          }
         }
       }
       visibility_config {

@@ -68,7 +68,8 @@ jobs:
 
       - uses: aws-actions/configure-aws-credentials@v6
         with:
-          role-to-assume: ${{ vars.AWS_API_DEPLOY_ROLE_ARN }}
+          mask-aws-account-id: true # public repo: public logs
+          role-to-assume: ${{ secrets.AWS_API_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - id: ecr
@@ -78,7 +79,8 @@ jobs:
         id: image
         run: |
           IMAGE="${{ steps.ecr.outputs.registry }}/${{ vars.ECR_REPOSITORY }}:$IMAGE_TAG"
-          docker build -f apps/api/Dockerfile --target prod -t "$IMAGE" .
+          # Plain image manifest: attestations would make it an image index, which Lambda rejects.
+          docker build --provenance=false --sbom=false -f apps/api/Dockerfile --target prod -t "$IMAGE" .
           docker push "$IMAGE"
           echo "uri=$IMAGE" >> "$GITHUB_OUTPUT"
 

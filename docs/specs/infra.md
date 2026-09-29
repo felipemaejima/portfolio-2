@@ -110,17 +110,17 @@ A API (ver `backend.md`) e o futuro front em React só rodam localmente em Docke
   - `/uploads/*` → bucket de uploads (objetos sob o prefixo `uploads/`), cache longo (keys UUID imutáveis).
   - `/api/*` → Function URL da Lambda, todos os métodos, política `UseOriginCacheControlHeaders-QueryStrings` (cacheia só o que a API marca como cacheável; TTL padrão 0), origin request `AllViewerExceptHostHeader` (a Function URL precisa ver o próprio host) e uma **CloudFront Function que grava o IP real do visitante** em `x-viewer-ip`, sobrescrevendo qualquer valor enviado pelo cliente.
 - **Origens privadas por OAC**: buckets e Function URL só respondem a requisições assinadas por esta distribuição. O CloudFront tem `s3:ListBucket` para que chaves inexistentes respondam 404 (não 403); ele nunca lista.
-- **Cabeçalhos de segurança** pela política gerenciada `SecurityHeadersPolicy` (HSTS, nosniff, frame options, referrer policy). CSP fica para o `apps/web`.
+- **Cabeçalhos de segurança** pela política gerenciada `SecurityHeadersPolicy` (HSTS, nosniff, frame options, referrer policy). A CSP vem do próprio `apps/web`, como `<meta>` gerada no build (o plano Free não aceita política de cabeçalhos customizada).
 - `PriceClass_All`: só ela inclui edges na América do Sul.
 - Mídia apagada pode continuar no cache até o TTL; aceitável (keys nunca reutilizadas).
-- Enquanto o `apps/web` não existe, o Terraform publica um `index.html` provisório (depois, o pipeline do web é dono do bucket).
+- O Terraform publica um `index.html` provisório só na criação; a partir do primeiro deploy do `apps/web`, o pipeline do web é dono do bucket.
 
-### WAF (5 regras, todas incluídas no plano)
+### WAF (4 regras, todas incluídas no plano)
 1. **Reputação de IP** (regra gerenciada da AWS): botnets e scanners conhecidos.
-2. **Rate limit em `/api/auth/*`**: 20 requisições por IP a cada 5 min.
-3. **Rate limit geral**: 1000 requisições por IP a cada 5 min (uma visita consome ~10–20).
-4. **Common Rule Set** (OWASP), com a regra de tamanho de corpo (8 KB) só contando — uploads têm até 4 MB.
-5. **Known Bad Inputs** (Log4j e afins).
+2. **Rate limit geral**: 1000 requisições por IP a cada 5 min (uma visita consome ~10–20).
+3. **Common Rule Set** (OWASP), com a regra de tamanho de corpo (8 KB) só contando — uploads têm até 4 MB.
+4. **Known Bad Inputs** (Log4j e afins).
+- **Sem rate limit por caminho na borda**: o tier Free recusa statements que inspecionam a requisição (*byte match*), necessários para restringir a regra a `/api/auth/*` (verificado no console ao assinar o plano: "configuration not available in this tier: byte match"). O brute force de login/refresh fica limitado por IP na própria API (contadores no Postgres). Com o plano Pro, a regra específica volta a ser possível.
 - Limitação conhecida: um ataque distribuído (muitos IPs, cada um abaixo do limite) passa pelo rate limit; aí entram o cache na borda, a franquia sem excedente e o disjuntor.
 
 ### API — Lambda + Function URL (sem API Gateway)
@@ -128,7 +128,7 @@ A API (ver `backend.md`) e o futuro front em React só rodam localmente em Docke
 - **Lambda Web Adapter** na imagem: traduz eventos em HTTP para o servidor Nest/Express existente — mesma imagem local e na Lambda. Readiness por **TCP** (o cold start não depende do banco).
 - **Function URL com `AWS_IAM`** + OAC do CloudFront: quem descobrir a URL recebe 403 **sem a função executar** (sem custo). Permissões `lambda:InvokeFunctionUrl` e `lambda:InvokeFunction` (esta só via Function URL), restritas à distribuição.
 - Por quê não API Gateway: cobra cada requisição que recebe (inclusive ataque) e, como origem do CloudFront, poderia ser acessado diretamente por quem descobrisse o endpoint, pulando o WAF.
-- **Consequências para clientes** (o futuro `apps/web`):
+- **Consequências para clientes** (implementadas no cliente de API do `apps/web`):
   - requisições com corpo (POST/PUT/PATCH) enviam **`x-amz-content-sha256`** com o SHA-256 do corpo (exigência da Lambda para payloads assinados pelo OAC) — Web Crypto no navegador, num wrapper de `fetch`;
   - o token do admin vai em **`X-Authorization: Bearer …`**: o CloudFront substitui `Authorization` pela própria assinatura;
   - upload envia o **arquivo cru como corpo** (não multipart), para o hash ser calculável.
@@ -155,13 +155,13 @@ A API (ver `backend.md`) e o futuro front em React só rodam localmente em Docke
   - JWT access/refresh: gerados pelo Terraform (`random_password`) e gravados no SSM.
   - URLs do Neon (pooled e direta): gravadas no SSM por `make db-secrets` (valor digitado, nunca em arquivo).
 - A Lambda recebe os valores como variáveis de ambiente (criptografadas em repouso), lidas do SSM pelo Terraform. Secrets Manager não compensa aqui (US$ 0,40/segredo/mês e latência no cold start).
-- O CI lê a URL direta do SSM via OIDC — **nenhum segredo de banco no GitHub**; o GitHub guarda só identificadores (ARNs, nomes).
+- O CI lê a URL direta do SSM via OIDC — **nenhum segredo de banco no GitHub**. O GitHub guarda só identificadores: como *variables* os que não revelam nada (domínio, nomes de recursos, nome do parâmetro SSM); como *secrets* os que contêm o ID da conta AWS (ARNs das roles, nomes dos buckets), porque os logs de um repositório público são públicos e secrets são mascarados. Os workflows também ativam `mask-aws-account-id`.
 
 ### CI/CD (GitHub Actions)
-- **Provedor OIDC do GitHub**; cada role confia num único `sub` do token: as de deploy (API e web), só em jobs do **environment `production`** do repositório — environment restrito ao `main` e com aprovação manual opcional no GitHub (gratuito em repositório público); a de backup, só no `main` (job agendado, sem aprovação). Permissões mínimas por workflow (API: push no ECR, update da função, leitura da URL direta; backup: leitura da URL direta e escrita no bucket de backups; web: sync do bucket e invalidação do CDN — pronta para o `apps/web`).
+- **Provedor OIDC do GitHub**; cada role confia num único `sub` do token: as de deploy (API e web), só em jobs do **environment `production`** do repositório — environment restrito ao `main` e com aprovação manual opcional no GitHub (gratuito em repositório público); a de backup, só no `main` (job agendado, sem aprovação). Permissões mínimas por workflow (API: push no ECR, update da função, leitura da URL direta; backup: leitura da URL direta e escrita no bucket de backups; web: sync do bucket e invalidação do CDN).
 - **Workflow da API**: lint + e2e (Postgres 18 como serviço) → build **arm64** (runner ARM nativo) → push no ECR → `migrate deploy` → atualização da Lambda → smoke test. Deploys serializados e nunca cancelados no meio.
 - **Workflow de backup** (diário): `pg_dump` pela conexão direta → bucket de backups (lifecycle de 30 dias).
-- **Workflow do web**: fora de escopo (nasce com o `apps/web`).
+- **Workflow do web**: lint + testes + build → upload no S3 (assets com hash e cache de 1 ano primeiro, `index.html` sem cache por último, sem apagar versões antigas para quem estiver com a página aberta) → invalidação do `index.html`, pelo environment `production`.
 
 ### Observabilidade e custo
 - **Disjuntor de custo**: um tópico SNS exclusivo aciona uma Lambda mínima que zera a concorrência reservada da API. O site estático segue no ar; a API responde erro até `make api-enable`. Dois gatilhos:
@@ -200,7 +200,6 @@ A API (ver `backend.md`) e o futuro front em React só rodam localmente em Docke
 
 ## Out of Scope
 
-- Aplicação `apps/web` e seu workflow de deploy (apenas hosting, role e o contrato de cliente — hash do corpo, `X-Authorization`, upload cru — definidos).
 - Ambiente de staging e branches de preview do Neon.
 - Terraform em CI (plan em PR / apply automático).
 - Planos pagos do CloudFront (CAPTCHA, desafio JavaScript, bot control avançado) — upgrade para o Pro se ataques exigirem.

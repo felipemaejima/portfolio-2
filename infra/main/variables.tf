@@ -23,6 +23,12 @@ variable "environment" {
   default = "prod"
 }
 
+variable "existing_anomaly_monitor_arn" {
+  description = "ARN of the AWS default services anomaly monitor, if the account already has one (only one is allowed); it is imported instead of created"
+  type        = string
+  default     = null
+}
+
 variable "monthly_budget_usd" {
   description = "Monthly cost ceiling (R$ 60 ~ US$ 11). Budgets alert; they never block spending."
   type        = number

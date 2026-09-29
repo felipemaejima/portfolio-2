@@ -78,35 +78,55 @@ A propagação leva de minutos a algumas horas. Confira com
 ### 6. Primeira imagem, o resto e o plano do CloudFront
 ```sh
 make api-publish      # build arm64 (emulado localmente, alguns minutos) e push no ECR
-make tf-apply         # certificado, CloudFront + WAF, Lambda, CI roles, alertas, disjuntor (~10–20 min)
+make tf-apply         # certificado, CloudFront + WAF, Lambda, CI roles, alertas, disjuntor, auditoria (~10–20 min)
 make plan-subscribe   # coloca CloudFront + WAF + hosted zone no plano de preço fixo Free
 ```
-Rode o `plan-subscribe` logo após o apply: até lá, o WAF é cobrado pelo preço normal (centavos). A saída deve
-mostrar `"status": "ACTIVE"`. O plano Free **não tem cobrança excedente** — passar da franquia (1M requisições,
+Rode o `plan-subscribe` logo após o apply: até lá, o WAF é cobrado pelo preço normal (centavos). A saída mostra
+`"status": "SYNC_IN_PROGRESS"`, que vira `ACTIVE` em instantes — confira com
+`make aws ARGS="pricing-plan-manager list-subscriptions --region us-east-1 --query 'subscriptionSummaries[].[planTier,status]' --output text"`.
+Se a assinatura for recusada por configuração incompatível, o console mostra o motivo: *CloudFront → a distribuição →
+Pricing plan → Free* (não aceite alterações automáticas; ajuste pelo Terraform). Se reclamar que a distribuição ainda está em implantação, espere alguns minutos
+(*CloudFront → Distributions*, status *Deployed*) e rode de novo. O plano Free **não tem cobrança excedente** — passar da franquia (1M requisições,
 100 GB) ou sofrer um ataque não gera fatura. O Terraform ainda não tem recurso para essa assinatura, por isso ela é
 feita pela AWS CLI com os ARNs de `terraform output plan_resource_arns`.
 
-Se o apply falhar no `aws_ce_anomaly_monitor` por limite, a conta já tem o monitor padrão da AWS (só é permitido
-um desse tipo). Pegue o ARN em *Billing and Cost Management → Cost Anomaly Detection* e traga-o para o Terraform:
-`make tf ARGS='import aws_ce_anomaly_monitor.services <arn>'`, depois `make tf-apply` de novo.
+Se o apply falhar no `aws_ce_anomaly_monitor` com *Limit exceeded on dimensional spend monitor creation*, a conta já
+tem o monitor padrão da AWS (só é permitido um desse tipo). Descubra o ARN:
+`make aws ARGS="ce get-anomaly-monitors --query 'AnomalyMonitors[].MonitorArn' --output text"`,
+coloque-o em `existing_anomaly_monitor_arn` no `terraform.tfvars` e rode `make tf-apply` de novo — o plano mostra
+"1 to import" e o Terraform passa a gerenciar o monitor existente. Não use `terraform import` pela linha de comando:
+depois de um apply interrompido, ele falha com *Invalid index*.
 
-Confirme o e-mail de assinatura do SNS que chega em seguida (alertas de erro). Budgets e anomalias não pedem
-confirmação.
+Confirme o e-mail de assinatura do SNS que chega em seguida: por ele vêm os alertas de erro do site, o aviso de
+disparo do disjuntor e os achados do IAM Access Analyzer (algo acessível de fora da conta). Budgets e anomalias de
+custo mandam e-mail direto, sem confirmação. O apply também liga a trilha do CloudTrail (auditoria de quem fez o quê
+na conta, guardada por 1 ano).
+
 
 ### 7. GitHub e primeiro deploy
 1. Em **Settings → Environments**, crie o environment **`production`**:
    - *Deployment branches and tags*: **Selected branches** → só `main`. Isso é obrigatório: a role de deploy na
      AWS confia no environment, e é esta regra que impede outro branch de usá-lo.
    - *Required reviewers* (opcional): você mesmo — cada deploy passa a esperar sua aprovação.
-2. `make tf ARGS='output github_variables'` e crie cada chave em **Settings → Secrets and variables → Actions →
-   Variables** do repositório (são identificadores, não segredos — os segredos ficam no SSM).
+2. Em **Settings → Secrets and variables → Actions** do repositório:
+   - `make tf ARGS='output github_variables'` → crie cada chave na aba **Variables** (identificadores sem nada
+     sensível);
+   - `make tf ARGS='output github_secrets'` → crie cada chave na aba **Secrets**. Nada ali dá acesso sozinho (as
+     roles só confiam neste repositório via OIDC; os buckets são privados), mas os valores contêm o ID da conta AWS e
+     os logs de um repositório público são públicos — secrets aparecem mascarados. Os workflows também mascaram o
+     ID da conta em qualquer saída (`mask-aws-account-id`).
+   Os segredos de verdade (URLs do banco, chaves JWT) nunca passam pelo GitHub: ficam no SSM.
    Faça os itens 1 e 2 **antes** de levar este código ao `main`: todo push no `main` que toque a API dispara o
    deploy.
-3. Leve o código ao `main` (merge do PR) ou, se já estiver lá, rode o workflow manualmente em
-   **Actions → api → Run workflow**. Ele roda: testes → imagem → **migrations no Neon** → release na Lambda → smoke.
-   Até este passo o banco está vazio: a imagem do passo 6 ainda não tem tabelas para ler.
-4. `make seed-prod` — cria o admin de produção no Neon (e-mail e senha digitados, nunca salvos). Não faz nada se
-   já existir um admin.
+3. Leve o código ao `main` (merge do PR) — isso dispara os dois workflows. Se o código já estiver lá, rode-os
+   manualmente em **Actions → Run workflow**:
+   - **api**: testes → imagem → **migrations no Neon** → release na Lambda → smoke. Até aqui o banco está vazio: a
+     imagem do passo 6 ainda não tem tabelas para ler.
+   - **web**: lint, testes e build do front → S3 → invalidação do `index.html`. Substitui a página provisória.
+   Com *Required reviewers*, cada um espera sua aprovação em *Actions*.
+4. `make seed-prod` — cria o admin de produção no Neon (e-mail e senha digitados, nunca salvos; não faz nada se
+   já existir um admin). Usa o container da API do ambiente local para rodar o seed: precisa do `.env` e de um
+   `make up` feito ao menos uma vez. Depois, entre em `https://<dominio>/admin` e preencha o conteúdo.
 
 ### 8. Conferir
 `make smoke DOMAIN=<dominio>` — deve terminar sem `FAIL`.
@@ -114,10 +134,11 @@ confirmação.
 ## Dia a dia
 | Tarefa | Comando |
 |---|---|
+| Sessão AWS expirada | `make aws-login` |
 | Ver/aplicar mudanças de infra | `make tf-plan` / `make tf-apply` |
-| Formatar e validar Terraform | `make tf-fmt` |
+| Formatar e validar Terraform / workflows | `make tf-fmt` / `make ci-lint` |
 | Trocar credenciais do banco | `make db-secrets` e depois `make tf-apply` (a Lambda recebe o novo valor) |
-| Deploy manual da API (fallback) | `make api-publish` e `make aws ARGS='lambda update-function-code --function-name <nome> --image-uri <uri>'` |
+| Deploy manual da API (fallback) | `make api-publish` e `make aws ARGS='lambda update-function-code --function-name <nome> --image-uri <uri>'` — não roda migrations: se o código tiver migration nova, prefira o workflow |
 | Religar a API após o disjuntor de custo | investigar o gasto, depois `make api-enable` |
 | Checar produção | `make smoke DOMAIN=<dominio>` |
 
@@ -139,7 +160,8 @@ Apague o `.dump` local depois: ele contém os dados do banco.
 Estimativa ~US$ 0–1/mês: CloudFront, WAF e Route 53 entram no plano Free; o resto fica em centavos. As camadas, de
 fora para dentro:
 
-1. **WAF** (no plano): reputação de IP, rate limit por IP (geral e em `/api/auth/*`), regras gerenciadas.
+1. **WAF** (no plano): reputação de IP, rate limit geral por IP, regras gerenciadas. O Free não permite limitar por
+   caminho (*byte match*); o brute force de login é limitado por IP na própria API.
 2. **Plano de preço fixo**: tráfego acima da franquia não é cobrado; bloqueios nem contam.
 3. **Cache na borda**: GETs públicos da API ficam 60 s no CloudFront — um flood da mesma URL não invoca a Lambda.
 4. **Origens privadas**: S3 e a Function URL só aceitam requisições assinadas pela distribuição (OAC); ninguém
@@ -149,10 +171,13 @@ fora para dentro:
    estático continua no ar e você recebe e-mail. Investigue e religue com `make api-enable` — um `terraform apply`
    nunca religa sozinho.
 
-Budgets também avisam por e-mail em 50/80% e na previsão de estouro.
+Budgets também avisam por e-mail em 50/80% e na previsão de estouro. A auditoria (CloudTrail + IAM Access Analyzer)
+custa centavos de S3.
+
 
 ## Contrato para o front (`apps/web`)
 Consequências do OAC na frente da Lambda que o cliente precisa seguir:
-- Requisições com corpo (POST/PUT/PATCH) enviam `x-amz-content-sha256` com o SHA-256 (hex) do corpo exato enviado.
+- Toda requisição que não seja GET/HEAD envia `x-amz-content-sha256` com o SHA-256 (hex) do corpo exato enviado —
+  sem corpo (ex.: DELETE, `/auth/refresh`), o hash da string vazia. Implementado em `apps/web/src/lib/api.ts`.
 - O token vai em `X-Authorization: Bearer <token>` — o CloudFront sobrescreve `Authorization` com a assinatura dele.
 - Upload: o corpo é o próprio arquivo (`Content-Type: image/png` etc.), não multipart.

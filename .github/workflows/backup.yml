@@ -15,7 +15,8 @@ jobs:
     steps:
       - uses: aws-actions/configure-aws-credentials@v6
         with:
-          role-to-assume: ${{ vars.AWS_BACKUP_ROLE_ARN }}
+          mask-aws-account-id: true # public repo: public logs
+          role-to-assume: ${{ secrets.AWS_BACKUP_ROLE_ARN }}
           aws-region: us-east-1
 
       # pg_dump must be at least the server's major version: use the same image as the database (18).
@@ -28,4 +29,4 @@ jobs:
           FILE="portfolio-$(date -u +%Y%m%dT%H%M%SZ).dump"
           docker run --rm -e DATABASE_URL postgres:18-alpine sh -c 'pg_dump --format=custom --no-owner "$DATABASE_URL"' > "$FILE"
           test -s "$FILE"
-          aws s3 cp "$FILE" "s3://${{ vars.BACKUP_BUCKET }}/$FILE"
+          aws s3 cp "$FILE" "s3://${{ secrets.BACKUP_BUCKET }}/$FILE"
