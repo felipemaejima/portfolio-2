@@ -1,0 +1,32 @@
+name: backup
+
+on:
+  schedule:
+    - cron: "0 6 * * *" # daily, 03:00 in Brasília
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  pg-dump:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          mask-aws-account-id: true # public repo: public logs
+          role-to-assume: ${{ secrets.AWS_BACKUP_ROLE_ARN }}
+          aws-region: us-east-1
+
+      # pg_dump must be at least the server's major version: use the same image as the database (18).
+      # The bucket's lifecycle rule deletes dumps after 30 days. Restore steps: infra/README.md.
+      - name: Dump Neon to S3
+        run: |
+          DATABASE_URL=$(aws ssm get-parameter --name "${{ vars.SSM_DIRECT_DATABASE_URL }}" --with-decryption --query Parameter.Value --output text)
+          echo "::add-mask::$DATABASE_URL"
+          export DATABASE_URL
+          FILE="portfolio-$(date -u +%Y%m%dT%H%M%SZ).dump"
+          docker run --rm -e DATABASE_URL postgres:18-alpine sh -c 'pg_dump --format=custom --no-owner "$DATABASE_URL"' > "$FILE"
+          test -s "$FILE"
+          aws s3 cp "$FILE" "s3://${{ secrets.BACKUP_BUCKET }}/$FILE"

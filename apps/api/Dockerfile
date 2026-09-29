@@ -11,7 +11,8 @@ ENV COREPACK_HOME=/corepack \
     COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 RUN corepack enable
 COPY package.json ./
-RUN corepack install && chmod -R a+rX /corepack
+# `pnpm --version` also fetches pnpm's native binary now, instead of on every container start.
+RUN corepack install && pnpm --version && chmod -R a+rX /corepack
 
 # Dev: the repo (including node_modules) is bind-mounted; runs as `node` (uid 1000) so files keep the host owner.
 FROM base AS dev
@@ -25,14 +26,19 @@ COPY . .
 RUN pnpm install --frozen-lockfile --filter api... \
  && pnpm --filter api exec prisma generate \
  && pnpm --filter api build \
- && pnpm --filter api deploy --prod --legacy /out \
- && cd /out && ./node_modules/.bin/prisma generate
+ && pnpm --filter api deploy --prod --legacy /out
 
-# Production: app + prod dependencies only (the Prisma CLI stays for `migrate deploy`).
+# Production: compiled app (Prisma client included) + runtime dependencies only. Migrations run in CI, not here.
+# ponytail: the Prisma CLI (~200 MB) still lands in node_modules as an optional peer of @prisma/client resolved in
+# the lockfile; unused at runtime. Strip it (pnpmfile hook or bundling) if Lambda cold starts prove too slow.
+# The same image runs anywhere; on Lambda, the Web Adapter extension turns invocations into HTTP requests to it.
 FROM runtime AS prod
-ENV NODE_ENV=production
+COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:1.1.0 /lambda-adapter /opt/extensions/lambda-adapter
+ENV NODE_ENV=production \
+    PORT=3000 \
+    AWS_LWA_READINESS_CHECK_PROTOCOL=tcp
 COPY --from=build --chown=node:node /out /app
 RUN mkdir -p /data/uploads && chown node:node /data/uploads
 USER node
 EXPOSE 3000
-CMD ["sh", "-c", "./node_modules/.bin/prisma migrate deploy && node dist/main.js"]
+CMD ["node", "dist/main.js"]

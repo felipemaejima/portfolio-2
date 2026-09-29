@@ -1,9 +1,10 @@
-import { Controller, Get, Header, Module, Query, Req, Res, StreamableFile } from '@nestjs/common';
+import { Controller, Get, Header, Module, Query, Req, Res, StreamableFile, UseGuards } from '@nestjs/common';
 import { ApiProduces, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
+import { ClientIpThrottlerGuard } from '../common/client-ip-throttler.guard';
 import type { Request, Response } from 'express';
 import { Public } from '../common/public.decorator';
-import { LangQuery } from '../common/query';
+import { LangQuery, PUBLIC_CACHE } from '../common/query';
 import { PortfolioModule } from '../portfolio/portfolio.module';
 import { CvService } from './cv.service';
 
@@ -15,9 +16,11 @@ export class CvController {
 
   /** CV generated on demand from the visible portfolio content. */
   @Get()
+  @UseGuards(ClientIpThrottlerGuard)
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @ApiProduces('application/pdf')
-  @Header('Cache-Control', 'no-cache')
+  // Short edge/browser cache absorbs floods of the same URL; the ETag makes revalidation cheap.
+  @Header('Cache-Control', PUBLIC_CACHE)
   async get(
     @Query() { lang }: LangQuery,
     @Req() req: Request,

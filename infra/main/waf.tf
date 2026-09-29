@@ -1,0 +1,88 @@
+# WAF in front of everything (site, API, uploads). The Free flat-rate plan includes it — web ACL, rules and request
+# fees — with at most 5 rules; requests it blocks don't count toward the plan's usage allowance.
+# The Free tier rejects request-matching statements ("byte match"), so rate limits can't be scoped to a path: one
+# per-IP limit covers everything, and login/refresh brute force is limited per IP by the API itself (Postgres counters).
+locals {
+  managed_rule_groups = {
+    # Known malicious IPs (botnets, scanners). Cheapest check first.
+    ip-reputation = { priority = 0, name = "AWSManagedRulesAmazonIpReputationList", count_only = [] }
+    # OWASP-style protections. Its 8 KB body limit would block image uploads (up to 4 MB): counted, not blocked.
+    common = { priority = 3, name = "AWSManagedRulesCommonRuleSet", count_only = ["SizeRestrictions_BODY"] }
+    # Exploit patterns such as Log4j, invalid/malicious request shapes.
+    known-bad-inputs = { priority = 4, name = "AWSManagedRulesKnownBadInputsRuleSet", count_only = [] }
+  }
+  rate_limits = {
+    # HTTP flood from a single IP; a page view costs ~10-20 requests.
+    rate-limit-all = { priority = 1, limit = 1000 }
+  }
+}
+
+resource "aws_wafv2_web_acl" "site" {
+  name  = local.name
+  scope = "CLOUDFRONT" # CloudFront web ACLs must live in us-east-1
+
+  default_action {
+    allow {}
+  }
+
+  dynamic "rule" {
+    for_each = local.rate_limits
+    content {
+      name     = rule.key
+      priority = rule.value.priority
+      action {
+        block {}
+      }
+      statement {
+        rate_based_statement {
+          limit                 = rule.value.limit
+          evaluation_window_sec = 300
+          aggregate_key_type    = "IP"
+        }
+      }
+      visibility_config {
+        cloudwatch_metrics_enabled = true
+        metric_name                = rule.key
+        sampled_requests_enabled   = true
+      }
+    }
+  }
+
+  dynamic "rule" {
+    for_each = local.managed_rule_groups
+    content {
+      name     = rule.key
+      priority = rule.value.priority
+      override_action {
+        none {}
+      }
+      statement {
+        managed_rule_group_statement {
+          vendor_name = "AWS"
+          name        = rule.value.name
+
+          dynamic "rule_action_override" {
+            for_each = toset(rule.value.count_only)
+            content {
+              name = rule_action_override.value
+              action_to_use {
+                count {}
+              }
+            }
+          }
+        }
+      }
+      visibility_config {
+        cloudwatch_metrics_enabled = true
+        metric_name                = rule.key
+        sampled_requests_enabled   = true
+      }
+    }
+  }
+
+  visibility_config {
+    cloudwatch_metrics_enabled = true
+    metric_name                = local.name
+    sampled_requests_enabled   = true
+  }
+}

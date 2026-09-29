@@ -1,6 +1,8 @@
-import { Body, Controller, HttpCode, Inject, Patch, Post, Req, Res } from '@nestjs/common';
-import { ApiBearerAuth, ApiCookieAuth, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, HttpCode, Inject, Patch, Post, Req, Res, UseGuards } from '@nestjs/common';
+import { ApiCookieAuth, ApiSecurity, ApiTags } from '@nestjs/swagger';
+import { ADMIN_AUTH } from './auth.guard';
 import { Throttle } from '@nestjs/throttler';
+import { ClientIpThrottlerGuard } from '../common/client-ip-throttler.guard';
 import type { CookieOptions, Request, Response } from 'express';
 import { Public } from '../common/public.decorator';
 import { CONFIG, type Config } from '../config/config';
@@ -19,6 +21,7 @@ export class AuthController {
   ) {}
 
   @Public()
+  @UseGuards(ClientIpThrottlerGuard)
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Post('auth/login')
   @HttpCode(200)
@@ -30,6 +33,7 @@ export class AuthController {
 
   @Public()
   @ApiCookieAuth()
+  @UseGuards(ClientIpThrottlerGuard)
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Post('auth/refresh')
   @HttpCode(200)
@@ -40,7 +44,7 @@ export class AuthController {
   }
 
   /** Ends every session of the admin (all refresh tokens stop working). */
-  @ApiBearerAuth()
+  @ApiSecurity(ADMIN_AUTH)
   @Post('auth/logout')
   @HttpCode(204)
   async logout(@AdminId() adminId: string, @Res({ passthrough: true }) res: Response) {
@@ -49,7 +53,7 @@ export class AuthController {
   }
 
   /** Also ends every session. */
-  @ApiBearerAuth()
+  @ApiSecurity(ADMIN_AUTH)
   @Patch('admin/account/password')
   @HttpCode(204)
   async changePassword(

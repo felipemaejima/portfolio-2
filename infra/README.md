@@ -56,10 +56,7 @@ Teste: `make aws ARGS='sts get-caller-identity'` mostra sua conta.
 3. `make db-secrets` — cole as duas; elas vão para o SSM Parameter Store como SecureString, sem passar por arquivo.
 
 ### 4. Variáveis
-`cp infra/main/terraform.tfvars.example infra/main/terraform.tfvars` e preencha domínio, repositório, e-mail e os IDs
-numéricos do repositório — públicos, em `https://api.github.com/repos/<dono>/<repo>` (campos `owner.id` e `id`).
-Repositórios criados depois de 15/07/2026 identificam-se para a AWS (OIDC) com esses IDs imutáveis: um repositório
-apagado e recriado com o mesmo nome não herda a confiança.
+`cp infra/main/terraform.tfvars.example infra/main/terraform.tfvars` e preencha domínio, repositório e e-mail.
 
 ### 5. DNS primeiro
 Os certificados só validam depois que o domínio aponta para o Route 53, e o repositório de imagens precisa existir
