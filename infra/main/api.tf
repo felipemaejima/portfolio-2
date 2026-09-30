@@ -46,10 +46,13 @@ resource "aws_ssm_parameter" "jwt" {
   value    = each.value.result
 }
 
-# Written by `make db-secrets` (Neon console values). Only the pooled URL reaches the Lambda; the direct one is
-# read by CI for migrations and backups.
-data "aws_ssm_parameter" "database_url" {
-  name = "${local.ssm_prefix}/database-url"
+# The Neon URLs are written by `make db-secrets` (never by Terraform, so they stay out of its state and plans).
+# The Lambda reads the pooled one plus the JWT secrets at boot (see api_secrets below); CI reads only the direct one.
+locals {
+  api_secret_arns = [
+    for name in ["database-url", "jwt-access-secret", "jwt-refresh-secret"] :
+    "arn:aws:ssm:us-east-1:${local.account_id}:parameter${local.ssm_prefix}/${name}"
+  ]
 }
 
 # ---------------------------------------------------------------------------------------------------------------
@@ -89,6 +92,24 @@ resource "aws_iam_role_policy" "api_uploads" {
   })
 }
 
+# The function reads its secrets from SSM at boot instead of receiving them as environment variables: whoever can read
+# the function's configuration (the CI deploy role included) sees only parameter names, never values.
+resource "aws_iam_role_policy" "api_secrets" {
+  role = aws_iam_role.api.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      { Effect = "Allow", Action = "ssm:GetParameters", Resource = local.api_secret_arns },
+      {
+        Effect    = "Allow"
+        Action    = "kms:Decrypt"
+        Resource  = "*"
+        Condition = { StringEquals = { "kms:ViaService" = "ssm.us-east-1.amazonaws.com" } }
+      },
+    ]
+  })
+}
+
 resource "aws_cloudwatch_log_group" "api" {
   name              = "/aws/lambda/${local.name}-api"
   retention_in_days = 14
@@ -106,11 +127,10 @@ resource "aws_lambda_function" "api" {
 
   environment {
     variables = {
-      PUBLIC_URL         = "https://${var.domain}"
-      CLIENT_IP_HEADER   = "x-viewer-ip" # set by the CloudFront Function in web.tf; clients can't forge it
-      DATABASE_URL       = data.aws_ssm_parameter.database_url.value
-      JWT_ACCESS_SECRET  = random_password.jwt["access"].result
-      JWT_REFRESH_SECRET = random_password.jwt["refresh"].result
+      PUBLIC_URL       = "https://${var.domain}"
+      CLIENT_IP_HEADER = "x-viewer-ip" # set by the CloudFront Function in web.tf; clients can't forge it
+      # Where the app reads DATABASE_URL and the JWT secrets at boot (apps/api/src/ssm-secrets.ts). No secret values here.
+      SECRETS_SSM_PREFIX = local.ssm_prefix
       STORAGE_DRIVER     = "s3"
       S3_BUCKET          = aws_s3_bucket.this["uploads"].id
       UPLOADS_PUBLIC_URL = "https://${var.domain}/uploads"
@@ -126,7 +146,8 @@ resource "aws_lambda_function" "api" {
     system_log_level      = "WARN"
   }
 
-  depends_on = [aws_cloudwatch_log_group.api, aws_iam_role_policy_attachment.api_logs]
+  # The secrets policy must exist before any instance boots with SECRETS_SSM_PREFIX.
+  depends_on = [aws_cloudwatch_log_group.api, aws_iam_role_policy_attachment.api_logs, aws_iam_role_policy.api_secrets]
 
   lifecycle {
     # Infrastructure vs. release: CI swaps the image; an apply must never roll a deploy back.

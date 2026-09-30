@@ -222,11 +222,11 @@ Admin (`/admin/*`, JWT obrigatório):
 - Drift do spec versionado é verificado com `make openapi && git diff --exit-code apps/api/openapi.json` (o plugin do Swagger depende de informação de tipos, indisponível no ts-jest com `module: nodenext`, então o documento não é comparado dentro do Jest).
 
 ### Docker e Makefile
-- `docker compose` de dev na raiz: `api` (hot reload, monorepo montado — `node_modules` e store do pnpm ficam no próprio bind mount, visíveis para o editor), `db` (Postgres 18), `db-test` (Postgres isolado para e2e, em tmpfs), volume de uploads.
-- Dockerfile multi-stage de produção com pnpm (Corepack): instala com lockfile congelado filtrando só `apps/api` e suas dependências, gera artefato de deploy enxuto, runtime com usuário não-root, `prisma migrate deploy` no start.
+- `docker compose` de dev na raiz: `api` (hot reload, monorepo montado — `node_modules` e store do pnpm ficam no próprio bind mount, visíveis para o editor; healthcheck em `/api/health`), `web` (Vite, sobe depois que a `api` está saudável e faz proxy de `/api` e `/uploads`, mesma origem que em produção), `db` (Postgres 18), `db-test` (Postgres isolado para e2e, em tmpfs), volume de uploads.
+- Dockerfile multi-stage de produção com pnpm (Corepack): instala com lockfile congelado filtrando só `apps/api` e suas dependências, gera artefato de deploy enxuto, runtime com usuário não-root e o Lambda Web Adapter (a mesma imagem roda local e na Lambda). Migrations **não** rodam no start: ficam no pipeline de deploy (ver `infra.md`).
 - Stack (versões mais recentes compatíveis entre si): Node 24 LTS, pnpm 12, Nest 12, Prisma 7 (driver adapter `@prisma/adapter-pg`, config em `prisma.config.ts`), TypeScript 6 (TS 7 ainda sem suporte em ts-jest/swagger/typescript-eslint), Jest 30, Postgres 18. Lint com oxlint (padrão do template Nest 12) + `tsc --noEmit`.
 - Makefile na raiz (tudo via `docker compose`, invocando pnpm com filtro do workspace): `help` (padrão; lista os comandos), `up`, `down`, `logs`, `sh`, `install`, `migrate`, `migration name=…`, `seed`, `studio`, `test` (suite e2e; `t=<padrão>` filtra), `lint`, `openapi`, `build`, `reset-db`.
-- Portas do host configuráveis (`API_PORT`, `STUDIO_PORT`).
+- Portas do host configuráveis (`API_PORT`, `WEB_PORT`, `STUDIO_PORT`). Os targets de nuvem do Makefile estão descritos em `infra.md`.
 
 ## Testing Decisions
 

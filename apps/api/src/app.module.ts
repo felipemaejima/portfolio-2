@@ -24,7 +24,7 @@ import { StorageModule } from './storage/storage.service';
     PrismaModule,
     StorageModule,
     // Only sensitive routes are rate-limited here (ClientIpThrottlerGuard + @Throttle); the generic global limit
-    // lives in API Gateway. Counters are in Postgres because Lambda instances share no memory.
+    // lives in the CloudFront WAF. Counters are in Postgres because Lambda instances share no memory.
     ThrottlerModule.forRootAsync({
       inject: [PrismaService],
       useFactory: (prisma: PrismaService) => ({

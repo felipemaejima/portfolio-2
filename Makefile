@@ -23,7 +23,7 @@ TF_BOOT     := $(CLOUD) hashicorp/terraform:1.16.4 -chdir=infra/bootstrap
 .DEFAULT_GOAL := help
 
 .PHONY: help up down logs sh install migrate migration seed studio test lint openapi build test-web reset-db \
-        aws-configure aws-login tf-bootstrap tf-init tf-plan tf-apply aws tf tf-fmt ci-lint db-secrets seed-prod api-publish plan-subscribe api-enable smoke
+        aws-configure aws-login tf-bootstrap tf-init tf-plan tf-apply aws tf tf-fmt ci-lint db-secrets seed-prod api-publish plan-subscribe api-restart api-enable smoke
 
 help: ## list available commands
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "} {printf "  \033[36m%-13s\033[0m %s\n", $$1, $$2}'
@@ -116,7 +116,7 @@ tf-fmt: $(HOME)/.aws ## format + validate Terraform
 	$(TF) validate
 
 ci-lint: ## lint the GitHub Actions workflows (actionlint + shellcheck)
-	docker run --rm -v $(CURDIR):/repo -w /repo rhysd/actionlint:latest -color
+	docker run --rm -v $(CURDIR):/repo -w /repo rhysd/actionlint:1.7.12 -color
 
 db-secrets: $(HOME)/.aws ## store the Neon connection strings in SSM (typed, never echoed or written to disk)
 	@read -rsp "Neon POOLED connection string: " POOLED && echo && \
@@ -128,7 +128,7 @@ db-secrets: $(HOME)/.aws ## store the Neon connection strings in SSM (typed, nev
 	echo "Stored $(SSM_PREFIX)/database-url and $(SSM_PREFIX)/direct-database-url"
 
 api-publish: $(HOME)/.aws ## build the arm64 image and push it to ECR (first deploy / manual fallback; CI does this normally)
-	docker run --privileged --rm tonistiigi/binfmt --install arm64 >/dev/null
+	docker run --privileged --rm tonistiigi/binfmt:qemu-v10.2.3 --install arm64 >/dev/null
 	@# Tags are immutable in ECR: a timestamp keeps re-publishing the same commit possible.
 	@# No provenance/SBOM attestations: they turn the push into an image index, which Lambda rejects.
 	@REPO=$$($(TF_RAW) output -raw ecr_repository_url) && TAG=manual-$$(git rev-parse --short HEAD)-$$(date +%s) && \
@@ -147,9 +147,15 @@ seed-prod: $(HOME)/.aws ## create the production admin in Neon (prompts; no-op i
 	$(COMPOSE) run --rm --no-deps -e ADMIN_EMAIL -e ADMIN_PASSWORD -e DATABASE_URL api \
 	  sh -c 'pnpm --filter api build >/dev/null && node apps/api/dist/seed.js'
 
+api-restart: $(HOME)/.aws ## new Lambda instances, e.g. after changing a secret in SSM (read only at boot)
+	fn=$$($(TF_RAW) output -raw api_function_name) && \
+	$(AWS) lambda update-function-configuration --region us-east-1 --function-name $$fn \
+	  --description "restarted $$(date -u +%FT%TZ)" > /dev/null && \
+	$(AWS) lambda wait function-updated-v2 --region us-east-1 --function-name $$fn && echo "restarted $$fn"
+
 api-enable: $(HOME)/.aws ## turn the API back on after the cost kill switch disabled it
 	$(AWS) lambda delete-function-concurrency --region us-east-1 --function-name $$($(TF_RAW) output -raw api_function_name)
 
 smoke: ## post-deploy checks against production (DOMAIN=example.info)
 	@test -n "$(DOMAIN)" || (echo "usage: make smoke DOMAIN=<domain>" && exit 1)
-	docker run --rm -v $(CURDIR)/infra/smoke.sh:/smoke.sh:ro curlimages/curl:latest sh /smoke.sh $(DOMAIN)
+	docker run --rm -v $(CURDIR)/infra/smoke.sh:/smoke.sh:ro curlimages/curl:8.22.0 sh /smoke.sh $(DOMAIN)

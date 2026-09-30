@@ -61,7 +61,10 @@ Teste: `make aws ARGS='sts get-caller-identity'` mostra sua conta.
 1. Crie um projeto no Neon na região **AWS us-east-1** com **Postgres 18** (mesma major do ambiente local e do CI).
 2. Copie as duas connection strings do banco: **pooled** (host com `-pooler`, usada pela API) e **direct**
    (migrations, seed e backup).
-3. `make db-secrets` — cole as duas; elas vão para o SSM Parameter Store como SecureString, sem passar por arquivo.
+3. Na **pooled**, troque `sslmode=require` por `sslmode=verify-full` (verificação explícita do certificado, que o
+   driver da API manterá nas próximas versões). A **direct** fica com `sslmode=require`: o Prisma CLI e o `pg_dump`
+   tratam `verify-full` de outro jeito.
+4. `make db-secrets` — cole as duas; elas vão para o SSM Parameter Store como SecureString, sem passar por arquivo.
 
 ### 4. Variáveis
 `cp infra/main/terraform.tfvars.example infra/main/terraform.tfvars` e preencha domínio, repositório, e-mail e os IDs
@@ -148,7 +151,7 @@ na conta, guardada por 1 ano).
 | Sessão AWS expirada | `make aws-login` |
 | Ver/aplicar mudanças de infra | `make tf-plan` / `make tf-apply` |
 | Formatar e validar Terraform / workflows | `make tf-fmt` / `make ci-lint` |
-| Trocar credenciais do banco | `make db-secrets` e depois `make tf-apply` (a Lambda recebe o novo valor) |
+| Trocar credenciais do banco | `make db-secrets` e depois `make api-restart` (a Lambda lê os segredos do SSM só ao iniciar) |
 | Deploy manual da API (fallback) | `make api-publish` e `make aws ARGS='lambda update-function-code --function-name <nome> --image-uri <uri>'` — não roda migrations: se o código tiver migration nova, prefira o workflow |
 | Religar a API após o disjuntor de custo | investigar o gasto, depois `make api-enable` |
 | Checar produção | `make smoke DOMAIN=<dominio>` |

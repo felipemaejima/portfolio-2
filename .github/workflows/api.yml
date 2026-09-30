@@ -17,6 +17,7 @@ concurrency:
   group: api-deploy
   cancel-in-progress: false
 
+# Actions are pinned to commit SHAs (tags can be moved to malicious code; these jobs get AWS credentials).
 permissions:
   contents: read
 
@@ -41,8 +42,8 @@ jobs:
       JWT_ACCESS_SECRET: ci-only-access-secret-0123456789abcdef
       JWT_REFRESH_SECRET: ci-only-refresh-secret-0123456789abcdef
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
       - run: corepack enable && pnpm install --frozen-lockfile
@@ -64,16 +65,16 @@ jobs:
       # ECR tags are immutable: run id + attempt keep re-runs of the same commit deployable.
       IMAGE_TAG: ${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: aws-actions/configure-aws-credentials@v6
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
           mask-aws-account-id: true # public repo: public logs
           role-to-assume: ${{ secrets.AWS_API_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - id: ecr
-        uses: aws-actions/amazon-ecr-login@v2
+        uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2.1.7
 
       - name: Build and push image
         id: image
@@ -84,7 +85,7 @@ jobs:
           docker push "$IMAGE"
           echo "uri=$IMAGE" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
       - run: corepack enable && pnpm install --frozen-lockfile

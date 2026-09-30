@@ -147,14 +147,15 @@ A API (ver `backend.md`) e o futuro front em React só rodam localmente em Docke
 - **Endpoint `GET /api/health`** público (app + `SELECT 1`); usado só pelo smoke test (sem sonda periódica, para o Neon hibernar).
 - **Rate limit da aplicação persistido no Postgres**, nas rotas sensíveis (login, refresh, contato, CV): instâncias da Lambda não compartilham memória. O limite genérico fica no WAF.
 - **Migrations fora do runtime**: `prisma migrate deploy` no pipeline, pela conexão **direta** do Neon. O Prisma CLI ainda entra no `node_modules` da imagem (peer opcional do `@prisma/client` resolvido no lockfile), sem uso em runtime; removê-lo fica para quando o cold start medido justificar.
-- **Conexões Neon**: app usa a string **pooled** (PgBouncer); migrations e backup, a **direta**. TLS obrigatório; certificados públicos.
+- **Conexões Neon**: app usa a string **pooled** (PgBouncer); migrations, seed e backup, a **direta**. TLS obrigatório; certificados de autoridade pública. A pooled usa `sslmode=verify-full` (o driver `pg` hoje já trata `require` assim, mas a próxima major volta à semântica do libpq, que não verifica o certificado); a direta mantém `sslmode=require`, porque é lida pelo Prisma CLI e pelo `pg_dump`, que tratam `verify-full` de outro jeito.
 - **Postgres 18** local, no CI e no Neon.
 
 ### Segredos
 - **SSM Parameter Store (SecureString, gratuito)** é a fonte única:
   - JWT access/refresh: gerados pelo Terraform (`random_password`) e gravados no SSM.
   - URLs do Neon (pooled e direta): gravadas no SSM por `make db-secrets` (valor digitado, nunca em arquivo).
-- A Lambda recebe os valores como variáveis de ambiente (criptografadas em repouso), lidas do SSM pelo Terraform. Secrets Manager não compensa aqui (US$ 0,40/segredo/mês e latência no cold start).
+- A Lambda **lê os segredos do SSM no boot** (uma chamada `GetParameters`, antes de a configuração ser validada), com a própria role, que só pode ler esses 3 parâmetros. As variáveis de ambiente da função guardam apenas o prefixo (`SECRETS_SSM_PREFIX`). Por quê: qualquer um que leia a configuração da função — inclusive a role de deploy do CI, e até a resposta do `UpdateFunctionCode` — veria variáveis de ambiente em texto puro. Custo: ~50–100 ms a mais só no cold start; SSM padrão é gratuito. O Terraform deixa de ler a URL do banco (fica fora do estado e dos planos). Secrets Manager não compensa aqui (US$ 0,40/segredo/mês sem ganho sobre o SSM).
+- Trocar um segredo: atualizar o SSM (`make db-secrets`) e forçar instâncias novas (`make api-restart`), sem `terraform apply`.
 - O CI lê a URL direta do SSM via OIDC — **nenhum segredo de banco no GitHub**. O GitHub guarda só identificadores: como *variables* os que não revelam nada (domínio, nomes de recursos, nome do parâmetro SSM); como *secrets* os que contêm o ID da conta AWS (ARNs das roles, nomes dos buckets), porque os logs de um repositório público são públicos e secrets são mascarados. Os workflows também ativam `mask-aws-account-id`.
 
 ### CI/CD (GitHub Actions)
@@ -176,13 +177,13 @@ A API (ver `backend.md`) e o futuro front em React só rodam localmente em Docke
   - **IAM Access Analyzer** de acesso externo (gratuito), com achados enviados por e-mail via EventBridge → SNS. O analisador de acesso não usado (pago) fica de fora.
 - **Endurecimento**: todos os buckets recusam acesso sem TLS; registro **CAA** no DNS (só a Amazon emite certificados para o domínio); ECR guarda as 5 imagens mais recentes (~1 GB cada).
 - **Riscos residuais aceitos** (documentados, sem custo fixo para eliminar):
-  - a role de deploy do CI lê a configuração da Lambda (incluindo segredos nas variáveis de ambiente) — equivalente ao acesso que ela já tem ao banco para migrar; o trust OIDC restringe a role ao `main` deste repositório;
+  - a role de deploy do CI lê a URL **direta** do banco para migrar — quem controla o deploy controla os dados. Ela não enxerga mais as chaves JWT nem a URL da app (segredos lidos pela Lambda no boot); separar as migrations num processo com aprovação própria seria o próximo passo, desproporcional para este projeto;
   - um ataque distribuído com caminhos aleatórios gera leituras 404 no S3 (US$ 0,40 por milhão), não absorvidas pelo cache;
   - a app conecta no Neon com o usuário dono do banco; um usuário sem DDL só para a app é melhoria futura.
 - Estimativa mensal: CloudFront, WAF e Route 53 cobertos pelo plano (US$ 0); Lambda, S3, ECR, CloudWatch e SNS em centavos ou nas cotas gratuitas; **total ~US$ 0–1**. Custo residual sob ataque distribuído: invocações da Lambda que passarem pelo WAF e pelo cache — limitado pelo disjuntor.
 
 ### Makefile (targets de nuvem)
-- `aws-configure`, `aws-login`, `tf-bootstrap`, `tf-init`, `tf-plan`, `tf-apply`, `aws` e `tf` (comandos avulsos), `tf-fmt`, `ci-lint`, `db-secrets`, `seed-prod` (admin de produção no Neon), `api-publish` (primeira imagem / fallback), `plan-subscribe` (plano Free do CloudFront), `api-enable` (religa a API após o disjuntor), `smoke`. Todos via containers, como o usuário do host.
+- `aws-configure`, `aws-login`, `tf-bootstrap`, `tf-init`, `tf-plan`, `tf-apply`, `aws` e `tf` (comandos avulsos), `tf-fmt`, `ci-lint`, `db-secrets`, `seed-prod` (admin de produção no Neon), `api-publish` (primeira imagem / fallback), `plan-subscribe` (plano Free do CloudFront), `api-restart` (instâncias novas após trocar um segredo no SSM), `api-enable` (religa a API após o disjuntor), `smoke`. Todos via containers, como o usuário do host.
 
 ## Testing Decisions
 

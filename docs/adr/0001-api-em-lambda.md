@@ -29,7 +29,8 @@ Opções avaliadas para a API:
   não vêm da distribuição são recusadas antes de executar a função.
 - Site, API (`/api/*`) e uploads numa **única distribuição CloudFront no plano de preço fixo Free**, com **WAF**
   (reputação de IP, rate limit por IP, regras gerenciadas): sem cobrança excedente, requisições bloqueadas não contam.
-- **Disjuntor**: Budget estourado → SNS → Lambda que zera a concorrência da API.
+- **Disjuntor**: alarme de compute da API (dispara em minutos) ou Budget estourado (dados de cobrança atrasam) → SNS
+  → Lambda que zera a concorrência da API.
 - Banco no **Neon** (plano gratuito) via conexão pooled.
 
 ## Consequências

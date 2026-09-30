@@ -1,7 +1,8 @@
-/** E2E only: the whole app over HTTP against a real Postgres (see Makefile `test`). */
+/** The whole app over HTTP against a real Postgres (see Makefile `test`). */
 module.exports = {
   rootDir: '..',
-  testRegex: 'test/.*\\.e2e-spec\\.ts$',
+  // e2e suites (HTTP against the real app) plus a few unit specs of boot-time logic.
+  testRegex: 'test/.*\\.(e2e-)?spec\\.ts$',
   moduleFileExtensions: ['js', 'json', 'ts'],
   testEnvironment: 'node',
   // The generated Prisma client imports its TS siblings as `./x.js`.
