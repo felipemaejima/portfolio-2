@@ -4,18 +4,20 @@ import { ApiError, api } from '../lib/api';
 import { formatPeriod, useLang } from '../lib/i18n';
 import type { Portfolio } from '../lib/types';
 import { useFetch } from '../lib/use-fetch';
+import { useReveal } from '../lib/use-reveal';
 import { ProjectCard } from './ProjectCard';
 import { SiteHeader } from './SiteHeader';
 
 export function PortfolioPage() {
   const { lang, t } = useLang();
   const { data, error, loading } = useFetch<Portfolio>(`/portfolio?lang=${lang}`);
+  useReveal(data);
 
   if (!data) {
     return (
       <>
         <SiteHeader />
-        <main className="status">{loading ? t.loading : error ? t.loadError : null}</main>
+        <main className={loading ? 'status loading' : 'status'}>{loading ? t.loading : error ? t.loadError : null}</main>
       </>
     );
   }
@@ -61,7 +63,7 @@ export function PortfolioPage() {
           </ul>
         </section>
 
-        <section id="about" className="section about">
+        <section id="about" className="section about" data-reveal>
           {profile.photoUrl ? (
             <img className="photo" src={profile.photoUrl} alt={profile.name} />
           ) : (
@@ -93,7 +95,7 @@ export function PortfolioPage() {
         </section>
 
         {skillCategories.length > 0 && (
-          <section id="skills" className="section">
+          <section id="skills" className="section" data-reveal>
             <h2>{t.skills}</h2>
             <div className="grid grid-4">
               {skillCategories.map((category) => (
@@ -112,7 +114,7 @@ export function PortfolioPage() {
           </section>
         )}
 
-        <section id="projects" className="section">
+        <section id="projects" className="section" data-reveal>
           <h2>{t.projects}</h2>
           <div className="grid grid-3">
             {projects.map((project) => (
@@ -127,7 +129,7 @@ export function PortfolioPage() {
         </section>
 
         {experiences.length > 0 && (
-          <section id="experience" className="section">
+          <section id="experience" className="section" data-reveal>
             <h2>{t.professionalExperience}</h2>
             <ol className="timeline">
               {experiences.map((item) => (
@@ -151,7 +153,7 @@ export function PortfolioPage() {
         )}
 
         {education.length > 0 && (
-          <section id="education" className="section">
+          <section id="education" className="section" data-reveal>
             <h2>{t.education}</h2>
             <ol className="timeline">
               {education.map((item) => (
@@ -170,7 +172,7 @@ export function PortfolioPage() {
         )}
 
         {services.length > 0 && (
-          <section id="services" className="section">
+          <section id="services" className="section" data-reveal>
             <h2>{t.services}</h2>
             <div className="grid grid-4">
               {services.map((service) => (
@@ -183,7 +185,7 @@ export function PortfolioPage() {
           </section>
         )}
 
-        <section id="contact" className="section contact">
+        <section id="contact" className="section contact" data-reveal>
           <div>
             <h2>{t.contact}</h2>
             <p className="body-text">{t.contactText}</p>
@@ -252,7 +254,7 @@ function ContactForm() {
         {t.message}
         <textarea name="message" required maxLength={5000} rows={4} />
       </label>
-      <button className="button button-accent" type="submit" disabled={status.sending}>
+      <button className="button button-accent" type="submit" disabled={status.sending} aria-busy={status.sending}>
         {status.sending ? t.sending : t.send}
       </button>
       {status.message && (
