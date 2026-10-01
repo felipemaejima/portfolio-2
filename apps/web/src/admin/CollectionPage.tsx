@@ -119,7 +119,7 @@ export function CollectionPage({ collection }: { collection: Collection }) {
         onCancel={(event) => (busy === 'save' ? event.preventDefault() : setEditing(null))}
       >
         {editing && (
-          <form className="form" onSubmit={save}>
+          <form className="form field-grid" onSubmit={save}>
             <div className="modal-header">
               <h2 id="modal-title">{editing.id ? 'Editar item' : 'Novo item'}</h2>
               <button type="button" className="button button-small" aria-label="Fechar" disabled={busy === 'save'} onClick={() => setEditing(null)}>
@@ -139,7 +139,7 @@ export function CollectionPage({ collection }: { collection: Collection }) {
                 {error}
               </p>
             )}
-            <div className="actions modal-actions">
+            <div className="actions form-footer">
               <button type="submit" className="button button-accent" disabled={busy !== null} aria-busy={busy === 'save'}>
                 {busy === 'save' ? 'Salvando…' : 'Salvar'}
               </button>

@@ -34,19 +34,21 @@ export function ProfilePage() {
 
   if (!values) return <p className={status ? 'form-error' : 'muted loading'}>{status ?? 'Carregando…'}</p>;
   return (
-    <form className="form admin-form" onSubmit={(event) => void save(event)}>
+    <form className="form admin-form field-grid" onSubmit={(event) => void save(event)}>
       <h1>Perfil</h1>
       {PROFILE_FIELDS.map((field) => (
         <FieldInput key={field.key} field={field} values={values} onChange={(changes) => setValues({ ...values, ...changes })} />
       ))}
-      <button type="submit" className="button button-accent" disabled={saving} aria-busy={saving}>
-        {saving ? 'Salvando…' : 'Salvar'}
-      </button>
-      {status && (
-        <p className="form-message" role="status">
-          {status}
-        </p>
-      )}
+      <div className="form-footer">
+        <button type="submit" className="button button-accent" disabled={saving} aria-busy={saving}>
+          {saving ? 'Salvando…' : 'Salvar'}
+        </button>
+        {status && (
+          <p className="form-message" role="status">
+            {status}
+          </p>
+        )}
+      </div>
     </form>
   );
 }
