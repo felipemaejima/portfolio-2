@@ -16,7 +16,7 @@ const STRINGS = {
     underConstruction: 'Portfolio em construção.', allProjects: 'Todos os projetos', search: 'Buscar',
     tagsPlaceholder: 'Tecnologias (ex.: react, node)', allTagsRequired: 'Exigir todas', featuredOnly: 'Só destaques',
     newest: 'Mais recentes', manualOrder: 'Ordem do autor', noProjects: 'Nenhum projeto encontrado.', previous: 'Anterior',
-    next: 'Próxima', back: 'Voltar', photo: 'foto',
+    next: 'Próxima', back: 'Voltar', photo: 'foto', close: 'Fechar',
   },
   en: {
     about: 'About', projects: 'Projects', skills: 'Skills', experience: 'Experience', education: 'Education',
@@ -30,7 +30,7 @@ const STRINGS = {
     underConstruction: 'Portfolio under construction.', allProjects: 'All projects', search: 'Search',
     tagsPlaceholder: 'Technologies (e.g. react, node)', allTagsRequired: 'Require all', featuredOnly: 'Featured only',
     newest: 'Newest', manualOrder: "Author's order", noProjects: 'No projects found.', previous: 'Previous',
-    next: 'Next', back: 'Back', photo: 'photo',
+    next: 'Next', back: 'Back', photo: 'photo', close: 'Close',
   },
 } as const;
 

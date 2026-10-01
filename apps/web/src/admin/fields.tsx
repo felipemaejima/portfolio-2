@@ -207,7 +207,7 @@ function MediaInput({ label, url, onChange }: { label: string; url: string | nul
           Remover imagem
         </button>
       )}
-      {state.uploading && <small>Enviando…</small>}
+      {state.uploading && <small className="loading">Enviando imagem…</small>}
       {state.error && <p className="form-error">{state.error}</p>}
     </fieldset>
   );

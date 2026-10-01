@@ -75,10 +75,10 @@ export function ProjectsPage() {
           </select>
         </form>
 
-        {loading && !data && <p className="status">{t.loading}</p>}
+        {loading && !data && <p className="status loading">{t.loading}</p>}
         {error ? <p className="status">{t.loadError}</p> : null}
         {data && data.items.length === 0 && <p className="status">{t.noProjects}</p>}
-        <div className="grid grid-3">
+        <div className="grid grid-3 fade-items" aria-busy={loading}>
           {data?.items.map((project) => (
             <ProjectCard key={project.id} project={project} />
           ))}

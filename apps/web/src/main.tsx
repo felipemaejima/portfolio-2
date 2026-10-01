@@ -20,7 +20,7 @@ createRoot(document.getElementById('root')!).render(
           <Route
             path="/admin/*"
             element={
-              <Suspense fallback={<p className="status">…</p>}>
+              <Suspense fallback={<p className="status loading">Carregando…</p>}>
                 <AdminApp />
               </Suspense>
             }
