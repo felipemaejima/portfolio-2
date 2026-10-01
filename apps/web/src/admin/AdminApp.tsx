@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, NavLink, Navigate, Route, Routes, useParams } from 'react-router';
 import { login, logout, refreshSession } from '../lib/api';
+import { ThemeToggle } from '../lib/theme';
 import { AccountPage } from './AccountPage';
 import { CollectionPage } from './CollectionPage';
 import { COLLECTIONS } from './collections';
@@ -60,9 +61,12 @@ export function AdminApp() {
             ))}
             <NavLink to="/admin/conta">Senha</NavLink>
           </nav>
-          <button type="button" className="button button-small" onClick={() => void logout().finally(() => endSession())}>
-            Sair
-          </button>
+          <div className="admin-menu-footer">
+            <button type="button" className="button button-small" onClick={() => void logout().finally(() => endSession())}>
+              Sair
+            </button>
+            <ThemeToggle labels={{ light: 'Usar tema claro', dark: 'Usar tema escuro' }} />
+          </div>
         </div>
       </aside>
       <main className="admin-main">

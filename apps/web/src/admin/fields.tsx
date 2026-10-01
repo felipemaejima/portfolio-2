@@ -104,7 +104,9 @@ export function FieldInput({ field, values, onChange }: { field: Field; values: 
     case 'tags':
       return (
         <label>
-          {field.label} <small>(separadas por vírgula)</small>
+          <span>
+            {field.label} <small>(separadas por vírgula)</small>
+          </span>
           <input value={value as string} onChange={onText} />
         </label>
       );
@@ -129,7 +131,9 @@ function LocalizedInput(props: { label: string; multiline: boolean; required?: b
         <Input value={value.pt} required={required} rows={multiline ? 3 : undefined} onChange={(event) => onChange({ ...value, pt: event.target.value })} />
       </label>
       <label>
-        EN <small>(opcional; vazio usa o PT)</small>
+        <span>
+          EN <small>(opcional; vazio usa o PT)</small>
+        </span>
         <Input value={value.en ?? ''} rows={multiline ? 3 : undefined} onChange={(event) => onChange({ ...value, en: event.target.value })} />
       </label>
     </fieldset>

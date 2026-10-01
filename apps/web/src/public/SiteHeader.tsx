@@ -1,5 +1,6 @@
 import { Link } from 'react-router';
 import { useLang } from '../lib/i18n';
+import { ThemeToggle } from '../lib/theme';
 
 const SECTIONS = ['about', 'projects', 'skills', 'experience', 'education', 'services', 'contact'] as const;
 
@@ -18,6 +19,7 @@ export function SiteHeader({ name }: { name?: string }) {
         ))}
       </nav>
       <div className="header-actions">
+        <ThemeToggle labels={{ light: t.themeLight, dark: t.themeDark }} />
         <button
           type="button"
           className="lang-toggle"
