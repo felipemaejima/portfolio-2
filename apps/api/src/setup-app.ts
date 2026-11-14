@@ -31,6 +31,7 @@ export function setupApp(app: NestExpressApplication) {
   );
   app.use(cookieParser());
   // API responses are private unless a route opts in (see PUBLIC_CACHE): nothing admin-related is ever cached by the CDN.
+  // Errors stay private even on those routes (AppExceptionFilter).
   app.use('/api', (_req: express.Request, res: express.Response, next: express.NextFunction) => {
     res.setHeader('Cache-Control', 'no-store');
     next();

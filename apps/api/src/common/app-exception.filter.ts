@@ -20,7 +20,8 @@ const isClientHttpError = (error: unknown): error is ClientHttpError =>
   (error as ClientHttpError).status >= 400 &&
   (error as ClientHttpError).status < 500;
 
-/** Maps known non-Nest errors to HTTP errors; anything else keeps Nest's default handling (500 + error log). */
+/** Maps known non-Nest errors to HTTP errors (anything else keeps Nest's default: 500 + error log), and never lets an
+ * error inherit a public Cache-Control. */
 @Catch()
 export class AppExceptionFilter extends BaseExceptionFilter {
   catch(error: unknown, host: ArgumentsHost) {

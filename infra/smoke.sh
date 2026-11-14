@@ -22,6 +22,8 @@ check "public GET cacheable by browsers" "public, max-age=60" "$(header cache-co
 check "admin requires a token"           401 "$(status "$API/admin/profile")"
 check "admin responses never cached"     "no-store" "$(header cache-control "$API/admin/profile")"
 check "swagger hidden in production"     404 "$(status "$API/docs")"
+check "CV download (pt)"                 200 "$(status "$API/cv?lang=pt")"
+check "CV is a PDF"                      "%PDF-" "$(curl -s "$API/cv?lang=pt" | head -c 5)"
 check "site root"                        200 "$(status "$SITE/")"
 check "SPA deep link"                    200 "$(status "$SITE/projetos")"
 check "missing upload is a real 404"     404 "$(status "$SITE/uploads/does-not-exist.png")"

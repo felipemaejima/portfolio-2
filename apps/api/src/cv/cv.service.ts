@@ -14,9 +14,9 @@ const FONTS = {
 pdfmake.setFonts(FONTS);
 // The CV is built from our own data only: no remote or local file access. pdfmake runs font names through the local
 // policy too; standard names resolve to pdfkit's bundled metrics, not a path we choose, so only those pass.
-const STANDARD_FONTS = new Set<string>(Object.values(FONTS.Helvetica));
+const ALLOWED_FONT_NAMES = new Set<string>(Object.values(FONTS.Helvetica));
 pdfmake.setUrlAccessPolicy(() => false);
-pdfmake.setLocalAccessPolicy((path) => STANDARD_FONTS.has(path));
+pdfmake.setLocalAccessPolicy((path) => ALLOWED_FONT_NAMES.has(path));
 
 const CONTENT_TABLES = ['Profile', 'SocialLink', 'SkillCategory', 'Skill', 'Project', 'Experience', 'Education', 'Service'];
 

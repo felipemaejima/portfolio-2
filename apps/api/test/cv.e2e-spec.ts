@@ -46,7 +46,10 @@ describe('cv', () => {
     const etag = first.headers.etag;
 
     await http.get('/api/cv?lang=pt').set('If-None-Match', etag).expect(304);
-    expect((await http.get('/api/cv?lang=en').expect(200)).headers.etag).not.toBe(etag);
+    const en = await http.get('/api/cv?lang=en').buffer(true).expect(200);
+    expect(en.headers['content-type']).toBe('application/pdf');
+    expect(en.body.subarray(0, 5).toString()).toBe('%PDF-');
+    expect(en.headers.etag).not.toBe(etag);
 
     await http.patch(`/api/admin/services/${created.body.id}`).set('X-Authorization', auth).send({ title: lt('Mentoria') }).expect(200);
     const afterUpdate = (await http.get('/api/cv?lang=pt').set('If-None-Match', etag).expect(200)).headers.etag;
