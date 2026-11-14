@@ -2,23 +2,30 @@ import { useState } from 'react';
 
 type Theme = 'light' | 'dark';
 
-// Without a saved choice the page follows the OS (styles.css); the toggle saves an explicit one.
+// Dark unless the visitor chose light with the toggle; the OS preference is ignored (styles.css defaults to dark too).
 // Per-visitor convenience only; storage may be unavailable (private mode), so every access is guarded.
-export function savedTheme(): Theme | null {
+export function savedTheme(): Theme {
   try {
-    const saved = localStorage.getItem('theme');
-    return saved === 'light' || saved === 'dark' ? saved : null;
+    return localStorage.getItem('theme') === 'light' ? 'light' : 'dark';
   } catch {
-    return null;
+    return 'dark';
   }
 }
 
-export function applyTheme(theme: Theme | null) {
-  if (theme) document.documentElement.dataset.theme = theme;
+export function saveTheme(theme: Theme) {
+  try {
+    localStorage.setItem('theme', theme);
+  } catch {
+    // Not remembered; still applied for this visit.
+  }
+}
+
+export function applyTheme(theme: Theme) {
+  document.documentElement.dataset.theme = theme;
 }
 
 export function ThemeToggle({ labels }: { labels: { light: string; dark: string } }) {
-  const [theme, setTheme] = useState<Theme>(() => savedTheme() ?? (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'));
+  const [theme, setTheme] = useState(savedTheme);
   const next = theme === 'light' ? 'dark' : 'light';
   return (
     <button
@@ -29,11 +36,7 @@ export function ThemeToggle({ labels }: { labels: { light: string; dark: string 
       onClick={() => {
         setTheme(next);
         applyTheme(next);
-        try {
-          localStorage.setItem('theme', next);
-        } catch {
-          // Not remembered; still applied for this visit.
-        }
+        saveTheme(next);
       }}
     >
       {theme === 'light' ? '☾' : '☀'}
