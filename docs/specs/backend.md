@@ -188,7 +188,7 @@ Todas as coleções têm `id`, `position` (int, ordenação manual), `visible` (
 ### CV
 - `GET /cv?lang=pt|en` público, gera PDF com **pdfmake** a cada request, a partir dos dados visíveis.
 - Conteúdo: perfil (nome, headline, resumo, localização, idiomas, contatos respeitando `showEmail`/`showPhone`), experiência, formação, habilidades, projetos **featured**. Sem foto.
-- `ETag` derivado do maior `updatedAt` do conteúdo + lang; responde 304 quando inalterado. Throttle estrito. Sem cache em disco.
+- `ETag` derivado do maior `updatedAt` do conteúdo + lang + versão do layout do PDF; responde 304 quando inalterado. Throttle estrito. Sem cache em disco.
 
 ### Contrato da API
 Todas as rotas ficam sob o prefixo **`/api`** (em todos os ambientes); os caminhos abaixo o omitem por brevidade.
