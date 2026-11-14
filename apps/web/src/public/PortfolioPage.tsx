@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
 import { ApiError, api } from '../lib/api';
 import { formatPeriod, useLang } from '../lib/i18n';
@@ -20,6 +20,9 @@ export function PortfolioPage() {
   useEffect(() => {
     if (ready) document.getElementById(location.hash.slice(1))?.scrollIntoView();
   }, [ready]);
+  // The value just copied by a CopyButton, for ~1.5s: its button shows a check and the status line below announces it.
+  const [copied, setCopied] = useState('');
+  const copiedTimer = useRef(0);
 
   if (!data) {
     return (
@@ -40,6 +43,15 @@ export function PortfolioPage() {
   }
   const sections = visibleSections(data);
   const skills = skillCategories.filter((category) => category.skills.length > 0);
+  const copy = async (value: string) => {
+    await navigator.clipboard.writeText(value);
+    setCopied(value);
+    clearTimeout(copiedTimer.current);
+    copiedTimer.current = window.setTimeout(() => setCopied(''), 1500);
+  };
+  const copyButton = (value: string, label: string) => (
+    <CopyButton label={label} copied={copied === value} onCopy={() => void copy(value).catch(() => undefined)} />
+  );
 
   return (
     <>
@@ -66,11 +78,13 @@ export function PortfolioPage() {
                 <a href={link.url} target="_blank" rel="noreferrer">
                   {link.label}
                 </a>
+                {copyButton(link.url, t.copyLink.replace('{label}', link.label))}
               </li>
             ))}
             {profile.email && (
               <li>
                 <a href={`mailto:${profile.email}`}>{profile.email}</a>
+                {copyButton(profile.email, t.copyEmail)}
               </li>
             )}
           </ul>
@@ -208,7 +222,7 @@ export function PortfolioPage() {
               {profile.email && (
                 <li>
                   {t.email} — <a href={`mailto:${profile.email}`}>{profile.email}</a>
-                  <CopyEmail email={profile.email} />
+                  {copyButton(profile.email, t.copyEmail)}
                 </li>
               )}
               {profile.phone && (
@@ -222,12 +236,18 @@ export function PortfolioPage() {
                   <a href={link.url} target="_blank" rel="noreferrer">
                     {link.url.replace(/^https?:\/\//, '')}
                   </a>
+                  {copyButton(link.url, t.copyLink.replace('{label}', link.label))}
                 </li>
               ))}
             </ul>
           </div>
           <ContactForm />
         </section>
+        {/* One for every copy button; always there, as a live region announces changes to its text. A new node per copied
+            value, so copying another link right after is announced too. */}
+        <p className="visually-hidden" role="status">
+          {copied && <span key={copied}>{t.copied}</span>}
+        </p>
       </main>
       <footer className="site-footer">
         <span>
@@ -291,29 +311,21 @@ function ContactForm() {
   );
 }
 
-/** Where the Clipboard API exists (secure contexts). The status line next to it is the visible and announced feedback. */
-function CopyEmail({ email }: { email: string }) {
-  const { t } = useLang();
-  const [copied, setCopied] = useState(false);
+/** Icon only, where the Clipboard API exists (secure contexts); a check replaces the icon while `copied`. */
+function CopyButton({ label, copied, onCopy }: { label: string; copied: boolean; onCopy: () => void }) {
   if (!navigator.clipboard) return null;
-  const copy = async () => {
-    await navigator.clipboard.writeText(email);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
   return (
-    <>
-      <button
-        type="button"
-        className="button button-small copy"
-        aria-label={t.copyEmail}
-        onClick={() => void copy().catch(() => undefined)}
-      >
-        {t.copy}
-      </button>
-      <span className="copy-status" role="status">
-        {copied ? t.emailCopied : ''}
-      </span>
-    </>
+    <button type="button" className={copied ? 'copy copied' : 'copy'} aria-label={label} title={label} onClick={onCopy}>
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        {copied ? (
+          <path d="M20 6 9 17l-5-5" />
+        ) : (
+          <>
+            <rect x="9" y="9" width="12" height="12" rx="2" />
+            <path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" />
+          </>
+        )}
+      </svg>
+    </button>
   );
 }
