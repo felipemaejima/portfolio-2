@@ -2,7 +2,7 @@ name: web
 
 on:
   push:
-    branches: [main]
+    branches: ["**"] # every branch (not tags) runs the tests; only main deploys (see the deploy job)
     paths:
       - apps/web/**
       - package.json
@@ -11,9 +11,10 @@ on:
       - .github/workflows/web.yml
   workflow_dispatch:
 
+# Branch runs: a newer push cancels the previous one. Main is never cancelled (its run carries the deploy).
 concurrency:
-  group: web-deploy
-  cancel-in-progress: false
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 # Actions are pinned to commit SHAs (tags can be moved to malicious code; these jobs get AWS credentials).
 permissions:
@@ -39,6 +40,11 @@ jobs:
 
   deploy:
     needs: build
+    if: github.ref == 'refs/heads/main'
+    # Deploys run one at a time and are never cancelled halfway.
+    concurrency:
+      group: web-deploy
+      cancel-in-progress: false
     runs-on: ubuntu-24.04
     # The AWS deploy role only trusts this environment (restricted to main, optional manual approval in GitHub).
     environment: production
