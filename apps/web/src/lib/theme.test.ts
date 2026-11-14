@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { saveTheme, savedTheme } from './theme';
+import { applyTheme, saveTheme, savedTheme } from './theme';
 
 describe('theme', () => {
   beforeEach(() => {
@@ -18,5 +18,14 @@ describe('theme', () => {
     expect(savedTheme()).toBe('light');
     saveTheme('dark');
     expect(savedTheme()).toBe('dark');
+  });
+
+  it("tints the browser's UI to match the applied theme", () => {
+    const themeColor = { content: '#161826', setAttribute(_: string, value: string) { this.content = value; } };
+    vi.stubGlobal('document', { documentElement: { dataset: {} }, querySelector: () => themeColor });
+    applyTheme('light');
+    expect(themeColor.content).toBe('#f6f6fa');
+    applyTheme('dark');
+    expect(themeColor.content).toBe('#161826');
   });
 });

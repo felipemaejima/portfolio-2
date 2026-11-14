@@ -22,6 +22,8 @@ export function saveTheme(theme: Theme) {
 
 export function applyTheme(theme: Theme) {
   document.documentElement.dataset.theme = theme;
+  // Browser UI (mobile address bar) matches --color-bg; index.html ships the dark value for the first paint.
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'light' ? '#f6f6fa' : '#161826');
 }
 
 export function ThemeToggle({ labels }: { labels: { light: string; dark: string } }) {

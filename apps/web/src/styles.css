@@ -85,7 +85,9 @@ h3 { font-size: 16px; }
 .site-header {
   display: flex; align-items: center; gap: 28px; padding: 20px var(--gutter); border-bottom: 1px solid var(--color-divider);
 }
-.brand { font-weight: 600; font-size: 18px; text-decoration: none; margin-right: auto; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 18px; text-decoration: none; margin-right: auto; }
+.brand-mark { width: 28px; height: 28px; flex: none; fill: var(--color-accent); }
+.brand-mark path { fill: var(--color-bg); }
 .site-nav { display: flex; gap: 24px; flex-wrap: wrap; }
 .site-nav a { font-size: 14px; text-decoration: none; color: var(--color-neutral-300); transition: color 0.18s; }
 .site-nav a:hover { color: var(--color-accent-300); }
@@ -290,6 +292,7 @@ main.section > h1 { font-size: 32px; margin-bottom: 24px; }
   :root { --gutter: 16px; }
   h1 { font-size: 38px; }
   .site-header { flex-wrap: wrap; gap: 12px; }
+  .brand-name { display: none; }
   .site-nav { order: 3; width: 100%; gap: 14px; overflow-x: auto; }
   .hero { padding: 56px var(--gutter); }
   .hero::before, .hero::after { display: none; }
