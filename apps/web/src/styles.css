@@ -1,7 +1,8 @@
 /* Design tokens from docs/ui/layout.html (dark), plus a light counterpart. light-dark() picks by color-scheme:
-   the OS preference by default, or the visitor's choice saved by the theme toggle (data-theme, see lib/theme.tsx). */
+   dark by default (whatever the OS prefers, so the first paint is dark before any JS runs), light only when the
+   visitor chose it with the theme toggle (data-theme, see lib/theme.tsx). */
 :root {
-  color-scheme: dark light;
+  color-scheme: dark;
   --color-bg: light-dark(#f6f6fa, #161826);
   --color-surface: light-dark(#ffffff, #232532);
   --color-surface-2: light-dark(#eeeef5, #2b2d3d);
@@ -22,7 +23,6 @@
   --gutter: 64px;
 }
 :root[data-theme='light'] { color-scheme: light; }
-:root[data-theme='dark'] { color-scheme: dark; }
 
 * { box-sizing: border-box; }
 body {

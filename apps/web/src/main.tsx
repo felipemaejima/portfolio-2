@@ -11,7 +11,7 @@ import { ProjectsPage } from './public/ProjectsPage';
 // Visitors never download the admin panel's code.
 const AdminApp = lazy(() => import('./admin/AdminApp').then((module) => ({ default: module.AdminApp })));
 
-// Before the first render, so a saved theme doesn't flash the OS one. (The CSP forbids an inline script in index.html.)
+// Before the first render, so a saved light theme doesn't flash dark. (The CSP forbids an inline script in index.html.)
 applyTheme(savedTheme());
 
 createRoot(document.getElementById('root')!).render(
