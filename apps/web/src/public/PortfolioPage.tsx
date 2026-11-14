@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
 import { ApiError, api } from '../lib/api';
 import { formatPeriod, useLang } from '../lib/i18n';
+import { paragraphs, splitItems } from '../lib/text';
 import type { Portfolio } from '../lib/types';
 import { useFetch } from '../lib/use-fetch';
 import { useReveal } from '../lib/use-reveal';
@@ -30,6 +31,7 @@ export function PortfolioPage() {
       </>
     );
   }
+  const skills = skillCategories.filter((category) => category.skills.length > 0);
 
   return (
     <>
@@ -37,7 +39,9 @@ export function PortfolioPage() {
       <SiteHeader name={profile.name} />
       <main>
         <section className="hero">
-          <p className="eyebrow">{profile.headline}</p>
+          <p className="eyebrow">
+            <Items text={profile.headline} />
+          </p>
           <h1>{profile.name}</h1>
           <p className="lead">{profile.summary}</p>
           <div className="actions">
@@ -72,7 +76,7 @@ export function PortfolioPage() {
           )}
           <div>
             <h2>{t.aboutMe}</h2>
-            {profile.about.map((paragraph, index) => (
+            {profile.about.flatMap(paragraphs).map((paragraph, index) => (
               <p key={index} className="body-text">
                 {paragraph}
               </p>
@@ -88,18 +92,20 @@ export function PortfolioPage() {
               ).map(([label, value]) => (
                 <div key={label}>
                   <dt>{label}</dt>
-                  <dd>{value}</dd>
+                  <dd>
+                    <Items text={value} />
+                  </dd>
                 </div>
               ))}
             </dl>
           </div>
         </section>
 
-        {skillCategories.length > 0 && (
+        {skills.length > 0 && (
           <section id="skills" className="section" data-reveal>
             <h2>{t.skills}</h2>
             <div className="grid grid-4">
-              {skillCategories.map((category) => (
+              {skills.map((category) => (
                 <div key={category.id}>
                   <p className="eyebrow">{category.name}</p>
                   <ul className="tags">
@@ -221,6 +227,15 @@ export function PortfolioPage() {
       </footer>
     </>
   );
+}
+
+/** A list typed as "a | b": each item wraps as a unit (.item in styles.css). */
+function Items({ text }: { text: string }) {
+  return splitItems(text).map((item, index) => (
+    <span key={index} className="item">
+      {item}
+    </span>
+  ));
 }
 
 function ContactForm() {
