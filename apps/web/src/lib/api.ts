@@ -22,8 +22,8 @@ type Options = { method?: string; json?: unknown; file?: Blob; auth?: boolean };
 export async function api<T>(path: string, options: Options = {}): Promise<T> {
   const response = await send(path, options);
   // Expired access token: renew it once with the refresh cookie and retry.
-  if (response.status === 401 && options.auth && (await refreshSession())) return parse<T>(await send(path, options));
-  return parse<T>(response);
+  if (response.status === 401 && options.auth && (await refreshSession())) return parse<T>(await send(path, options), options.auth);
+  return parse<T>(response, options.auth);
 }
 
 /** Shared by concurrent callers, so a burst of 401s triggers a single refresh. */
@@ -72,16 +72,28 @@ async function send(path: string, { method = 'GET', json, file, auth }: Options)
   return fetch(`/api${path}`, { method, headers, body, credentials: 'same-origin' });
 }
 
-async function parse<T>(response: Response): Promise<T> {
+async function parse<T>(response: Response, admin = false): Promise<T> {
   if (response.status === 204) return undefined as T;
   const data: unknown = await response.json().catch(() => null);
-  if (!response.ok) throw new ApiError(response.status, errorMessage(data) ?? response.statusText);
+  if (!response.ok) throw new ApiError(response.status, errorMessage(response.status, data, admin) ?? response.statusText);
   return data as T;
 }
 
-function errorMessage(data: unknown): string | undefined {
+/**
+ * The admin (authenticated requests) is Portuguese-only: common errors get a Portuguese message there. Other errors,
+ * and the public site's, keep the API's text — e.g. a 400 with a single message explains itself (password too short).
+ */
+const ADMIN_ERRORS: Record<string, string> = {
+  validation: 'Dados inválidos: confira os campos e tente de novo.', // ValidationPipe: 400 with a list of messages
+  401: 'Sessão expirada: entre de novo.',
+  409: 'Não foi possível: já existe um item igual, ou este item está em uso por outro registro.',
+  413: 'Envio grande demais (imagens: até 4 MB).',
+};
+
+function errorMessage(status: number, data: unknown, admin: boolean): string | undefined {
   const message = (data as { message?: string | string[] } | null)?.message;
-  return Array.isArray(message) ? message.join('; ') : message;
+  const translated = admin ? ADMIN_ERRORS[Array.isArray(message) ? 'validation' : status] : undefined;
+  return translated ?? (Array.isArray(message) ? message.join('; ') : message);
 }
 
 async function sha256Hex(body: string | Blob): Promise<string> {

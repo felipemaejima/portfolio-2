@@ -5,13 +5,19 @@ type LocalizedText = { pt: string; en?: string };
 type Option = { value: string; label: string };
 type Values = Record<string, unknown>;
 
-/** Form fields of the admin, declared per collection (collections.ts) and rendered by FieldInput. */
-export type Field = { key: string; label: string; required?: boolean } & (
+/** Form fields of the admin, declared per collection (collections.ts) and rendered by FieldInput. `maxLength` mirrors the API's. */
+export type Field = { key: string; label: string; required?: boolean; maxLength?: number } & (
   | { type: 'text' | 'url' | 'email' | 'date' | 'checkbox' | 'tags' }
   | { type: 'localized' | 'localizedText' | 'localizedList' }
   | { type: 'select'; options: readonly Option[] | (() => Promise<Option[]>) }
   | { type: 'media'; urlKey: string }
 );
+
+// The API's limits, checked by the browser before sending (localized texts: up to 5000 characters each).
+// type="url" alone accepts any scheme (ftp:, mailto:…); the API takes http(s) only.
+const URL_RULES = { pattern: 'https?://.+', maxLength: 500, title: 'Endereço completo, começando com http:// ou https://' };
+// ponytail: empty entries (",,") count toward the 20; toPayload drops them, so at worst a stray comma must go.
+const TAGS_PATTERN = String.raw`\s*[^,]{0,40}\s*(,\s*[^,]{0,40}\s*){0,19}`;
 
 /** Form state from an API record (or the empty defaults of a new one). */
 export function toFormValues(fields: Field[], record: Values = {}): Values {
@@ -79,7 +85,9 @@ export function toPayload(fields: Field[], values: Values): Values {
   return payload;
 }
 
-export function FieldInput({ field, values, onChange }: { field: Field; values: Values; onChange: (changes: Values) => void }) {
+/** `onUploading` reports an image upload in flight, so the form can hold save/cancel until it lands. */
+export function FieldInput(props: { field: Field; values: Values; onChange: (changes: Values) => void; onUploading?: (uploading: boolean) => void }) {
+  const { field, values, onChange, onUploading } = props;
   const value = values[field.key];
   const set = (next: unknown) => onChange({ [field.key]: next });
   const onText = (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => set(event.target.value);
@@ -100,21 +108,35 @@ export function FieldInput({ field, values, onChange }: { field: Field; values: 
     case 'select':
       return <SelectInput field={field} value={value as string} onChange={onText} />;
     case 'media':
-      return <MediaInput label={field.label} url={values[field.urlKey] as string | null} onChange={(id, url) => onChange({ [field.key]: id, [field.urlKey]: url })} />;
+      return (
+        <MediaInput
+          label={field.label}
+          url={values[field.urlKey] as string | null}
+          onChange={(id, url) => onChange({ [field.key]: id, [field.urlKey]: url })}
+          onUploading={onUploading}
+        />
+      );
     case 'tags':
       return (
         <label>
           <span>
-            {field.label} <small>(separadas por vírgula)</small>
+            {field.label} <small>(separadas por vírgula; até 20, de até 40 caracteres)</small>
           </span>
-          <input value={value as string} onChange={onText} />
+          <input value={value as string} onChange={onText} pattern={TAGS_PATTERN} title="Até 20 tags, de até 40 caracteres cada." />
         </label>
       );
     default:
       return (
         <label>
           {field.label}
-          <input type={field.type} value={value as string} onChange={onText} required={field.required} />
+          <input
+            type={field.type}
+            value={value as string}
+            onChange={onText}
+            required={field.required}
+            maxLength={field.maxLength}
+            {...(field.type === 'url' ? URL_RULES : {})}
+          />
         </label>
       );
   }
@@ -128,13 +150,13 @@ function LocalizedInput(props: { label: string; multiline: boolean; required?: b
       <legend>{label}</legend>
       <label>
         PT
-        <Input value={value.pt} required={required} rows={multiline ? 3 : undefined} onChange={(event) => onChange({ ...value, pt: event.target.value })} />
+        <Input value={value.pt} required={required} maxLength={5000} rows={multiline ? 3 : undefined} onChange={(event) => onChange({ ...value, pt: event.target.value })} />
       </label>
       <label>
         <span>
           EN <small>(opcional; vazio usa o PT)</small>
         </span>
-        <Input value={value.en ?? ''} rows={multiline ? 3 : undefined} onChange={(event) => onChange({ ...value, en: event.target.value })} />
+        <Input value={value.en ?? ''} maxLength={5000} rows={multiline ? 3 : undefined} onChange={(event) => onChange({ ...value, en: event.target.value })} />
       </label>
     </fieldset>
   );
@@ -180,16 +202,25 @@ function SelectInput({ field, value, onChange }: { field: Extract<Field, { type:
   );
 }
 
-function MediaInput({ label, url, onChange }: { label: string; url: string | null; onChange: (id: string | null, url: string | null) => void }) {
+function MediaInput(props: {
+  label: string;
+  url: string | null;
+  onChange: (id: string | null, url: string | null) => void;
+  onUploading?: (uploading: boolean) => void;
+}) {
+  const { label, url, onChange, onUploading } = props;
   const [state, setState] = useState<{ uploading: boolean; error?: string }>({ uploading: false });
   const upload = async (file: File) => {
     setState({ uploading: true });
+    onUploading?.(true);
     try {
       const media = await api<{ id: string; url: string }>('/admin/uploads', { method: 'POST', file, auth: true });
       onChange(media.id, media.url);
       setState({ uploading: false });
     } catch (error) {
       setState({ uploading: false, error: (error as Error).message });
+    } finally {
+      onUploading?.(false);
     }
   };
   return (

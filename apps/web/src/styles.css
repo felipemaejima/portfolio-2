@@ -213,6 +213,7 @@ input, textarea, select {
 input:hover, textarea:hover, select:hover { border-color: var(--color-neutral-600); }
 input:focus, textarea:focus, select:focus { border-color: var(--color-accent); }
 input:disabled, textarea:disabled, select:disabled { opacity: 0.6; }
+input:user-invalid, textarea:user-invalid, select:user-invalid { border-color: var(--color-danger); }
 .form .check, .filters .check { flex-direction: row; align-items: center; gap: 8px; font-size: 13px; color: var(--color-neutral-300); }
 .form-message { font-size: 13px; color: var(--color-accent-300); margin: 0; }
 .form-error { font-size: 13px; color: var(--color-danger); margin: 0; }

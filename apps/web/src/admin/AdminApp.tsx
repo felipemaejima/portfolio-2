@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, NavLink, Navigate, Route, Routes, useParams } from 'react-router';
-import { login, logout, refreshSession } from '../lib/api';
+import { ApiError, login, logout, refreshSession } from '../lib/api';
 import { ThemeToggle } from '../lib/theme';
 import { AccountPage } from './AccountPage';
 import { CollectionPage } from './CollectionPage';
@@ -111,7 +111,7 @@ function LoginPage({ notice, onLoggedIn }: { notice?: string; onLoggedIn: () => 
       await login(form.get('email') as string, form.get('password') as string);
       onLoggedIn();
     } catch (e) {
-      setError((e as Error).message);
+      setError(e instanceof ApiError && e.status === 401 ? 'E-mail ou senha incorretos.' : (e as Error).message);
       setSending(false);
     }
   };

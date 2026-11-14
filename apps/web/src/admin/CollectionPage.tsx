@@ -13,6 +13,7 @@ export function CollectionPage({ collection }: { collection: Collection }) {
   const [notice, setNotice] = useState<string>();
   // What is being saved: 'save', 'reorder', 'visible:<id>' or 'delete:<id>'. One change at a time.
   const [busy, setBusy] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
   const [dragId, setDragId] = useState<string | null>(null);
   const orderBeforeDrag = useRef('');
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -30,6 +31,7 @@ export function CollectionPage({ collection }: { collection: Collection }) {
 
   // The form lives in a native modal <dialog>: opened while `editing` is set (focus trap, Esc and backdrop for free).
   const isEditing = editing !== null;
+  const locked = busy === 'save' || uploading; // the form can't close mid-save or mid-upload
   useEffect(() => {
     const dialog = dialogRef.current;
     if (!dialog) return;
@@ -115,14 +117,14 @@ export function CollectionPage({ collection }: { collection: Collection }) {
         ref={dialogRef}
         className="modal"
         aria-labelledby="modal-title"
-        // Esc: closes, unless a save is in flight.
-        onCancel={(event) => (busy === 'save' ? event.preventDefault() : setEditing(null))}
+        // Esc: closes, unless a save or an upload is in flight.
+        onCancel={(event) => (locked ? event.preventDefault() : setEditing(null))}
       >
         {editing && (
           <form className="form field-grid" onSubmit={save}>
             <div className="modal-header">
               <h2 id="modal-title">{editing.id ? 'Editar item' : 'Novo item'}</h2>
-              <button type="button" className="button button-small" aria-label="Fechar" disabled={busy === 'save'} onClick={() => setEditing(null)}>
+              <button type="button" className="button button-small" aria-label="Fechar" disabled={locked} onClick={() => setEditing(null)}>
                 ✕
               </button>
             </div>
@@ -131,7 +133,9 @@ export function CollectionPage({ collection }: { collection: Collection }) {
                 key={field.key}
                 field={field}
                 values={editing.values}
-                onChange={(changes) => setEditing({ ...editing, values: { ...editing.values, ...changes } })}
+                onUploading={setUploading}
+                // From the latest state: an upload finishing after more typing (or after the form closed) must not restore a stale copy.
+                onChange={(changes) => setEditing((current) => current && { ...current, values: { ...current.values, ...changes } })}
               />
             ))}
             {error && busy === null && (
@@ -140,10 +144,10 @@ export function CollectionPage({ collection }: { collection: Collection }) {
               </p>
             )}
             <div className="actions form-footer">
-              <button type="submit" className="button button-accent" disabled={busy !== null} aria-busy={busy === 'save'}>
+              <button type="submit" className="button button-accent" disabled={busy !== null || uploading} aria-busy={busy === 'save'}>
                 {busy === 'save' ? 'Salvando…' : 'Salvar'}
               </button>
-              <button type="button" className="button" disabled={busy === 'save'} onClick={() => setEditing(null)}>
+              <button type="button" className="button" disabled={locked} onClick={() => setEditing(null)}>
                 Cancelar
               </button>
             </div>

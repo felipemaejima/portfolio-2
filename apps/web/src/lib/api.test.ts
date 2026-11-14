@@ -51,13 +51,31 @@ describe('api client (CloudFront OAC contract)', () => {
     expect(headersOf(fetch.mock.calls[2])['X-Authorization']).toBe('Bearer token-2');
   });
 
-  it('surfaces the API error message when the session cannot be renewed', async () => {
+  it('asks the admin to log in again when the session cannot be renewed', async () => {
     const fetch = vi
       .fn()
       .mockResolvedValueOnce(json(401, { message: 'Unauthorized' }))
       .mockResolvedValueOnce(json(401, { message: 'Unauthorized' }));
     vi.stubGlobal('fetch', fetch);
 
-    await expect(api('/admin/profile', { auth: true })).rejects.toEqual(new ApiError(401, 'Unauthorized'));
+    await expect(api('/admin/profile', { auth: true })).rejects.toEqual(new ApiError(401, 'Sessão expirada: entre de novo.'));
+  });
+
+  it('shows common admin errors in Portuguese, keeping specific messages and the public site as they are', async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(json(400, { message: ['tags.0 must be shorter than or equal to 40 characters'] }))
+      .mockResolvedValueOnce(json(409, { message: 'Resource is referenced by another record' }))
+      .mockResolvedValueOnce(new Response('<html>413</html>', { status: 413 })) // CloudFront's page, not JSON
+      .mockResolvedValueOnce(json(400, { message: 'newPassword must be at least 12 characters' }))
+      .mockResolvedValueOnce(json(400, { message: ['email must be an email'] }));
+    vi.stubGlobal('fetch', fetch);
+    const admin = () => api('/admin/projects', { method: 'POST', json: {}, auth: true });
+
+    await expect(admin()).rejects.toThrow('Dados inválidos');
+    await expect(admin()).rejects.toThrow('em uso por outro registro');
+    await expect(admin()).rejects.toThrow('até 4 MB');
+    await expect(admin()).rejects.toThrow('newPassword must be at least 12 characters');
+    await expect(api('/contact', { method: 'POST', json: {} })).rejects.toThrow('email must be an email');
   });
 });
