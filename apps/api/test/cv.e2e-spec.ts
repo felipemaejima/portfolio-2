@@ -16,6 +16,24 @@ describe('cv', () => {
   afterAll(() => app.close());
 
   it('generates a PDF and revalidates with ETag until content changes', async () => {
+    // With a profile there is text, so the PDF fonts actually load.
+    await http
+      .put('/api/admin/profile')
+      .set('X-Authorization', auth)
+      .send({
+        name: 'Ana Souza',
+        headline: lt('Desenvolvedora', 'Developer'),
+        summary: lt('Resumo com acentuação', 'Summary'),
+        about: [],
+        location: lt('São Paulo'),
+        availability: lt('CLT'),
+        workModality: lt('Remoto'),
+        spokenLanguages: lt('Português, inglês', 'Portuguese, English'),
+        email: 'ana@test.dev',
+        showEmail: true,
+        showPhone: false,
+      })
+      .expect(200);
     const created = await http
       .post('/api/admin/services')
       .set('X-Authorization', auth)
