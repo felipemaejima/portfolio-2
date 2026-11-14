@@ -217,7 +217,16 @@ textarea { resize: vertical; field-sizing: content; min-height: 4lh; max-height:
 small { color: var(--color-neutral-600); font-size: 11px; }
 
 .filters { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 32px; }
-.filters input[type='search'], .filters input:not([type]) { min-width: 220px; }
+.filters input[type='search'] { min-width: 220px; }
+/* Tag chips: toggle buttons; pressed ones are in the filter (marked by more than color). */
+.tag-filter { flex-basis: 100%; align-items: center; }
+button.tag {
+  font: 12px var(--font); color: var(--color-neutral-300); border: 1px solid var(--color-divider); cursor: pointer;
+  transition: border-color 0.18s, background-color 0.18s, color 0.18s;
+}
+button.tag:hover { border-color: var(--color-neutral-400); color: var(--color-text); }
+button.tag[aria-pressed='true'] { background: var(--color-accent-800); color: var(--color-accent-100); border-color: var(--color-accent); }
+button.tag[aria-pressed='true']::before { content: '✓' / ''; margin-right: 6px; }
 .pagination { display: flex; gap: 16px; align-items: center; justify-content: center; margin-top: 32px; font-size: 13px; }
 main.section > h1 { font-size: 32px; margin-bottom: 24px; }
 
