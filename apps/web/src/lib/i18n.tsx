@@ -17,7 +17,7 @@ const STRINGS = {
     technologies: 'Tecnologias', allTagsRequired: 'Exigir todas', featuredOnly: 'Só destaques',
     newest: 'Mais recentes', manualOrder: 'Ordem do autor', noProjects: 'Nenhum projeto encontrado.', previous: 'Anterior',
     next: 'Próxima', back: 'Voltar', photo: 'foto', close: 'Fechar', themeLight: 'Usar tema claro', themeDark: 'Usar tema escuro',
-    copy: 'Copiar', copyEmail: 'Copiar e-mail', emailCopied: 'E-mail copiado', messageSent: 'Mensagem enviada. Obrigado!',
+    copyEmail: 'Copiar e-mail', copyLink: 'Copiar link do {label}', copied: 'Copiado', messageSent: 'Mensagem enviada. Obrigado!',
   },
   en: {
     about: 'About', projects: 'Projects', skills: 'Skills', experience: 'Experience', education: 'Education',
@@ -32,7 +32,7 @@ const STRINGS = {
     technologies: 'Technologies', allTagsRequired: 'Require all', featuredOnly: 'Featured only',
     newest: 'Newest', manualOrder: "Author's order", noProjects: 'No projects found.', previous: 'Previous',
     next: 'Next', back: 'Back', photo: 'photo', close: 'Close', themeLight: 'Use light theme', themeDark: 'Use dark theme',
-    copy: 'Copy', copyEmail: 'Copy e-mail', emailCopied: 'E-mail copied', messageSent: 'Message sent. Thank you!',
+    copyEmail: 'Copy e-mail', copyLink: 'Copy {label} link', copied: 'Copied', messageSent: 'Message sent. Thank you!',
   },
 } as const;
 
