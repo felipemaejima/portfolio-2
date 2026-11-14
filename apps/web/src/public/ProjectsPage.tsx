@@ -1,5 +1,8 @@
+import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router';
+import { api } from '../lib/api';
 import { useLang } from '../lib/i18n';
+import { sameTag, selectedTags, toggleTag, uniqueTags } from '../lib/tag-filter';
 import type { Page, Portfolio, Project } from '../lib/types';
 import { useFetch } from '../lib/use-fetch';
 import { ProjectCard } from './ProjectCard';
@@ -19,6 +22,10 @@ export function ProjectsPage() {
   const { data, error, loading } = useFetch<Page<Project>>(`/projects?${query}`);
   // For the header: the owner's name and the home page's sections (usually still cached from the home page).
   const { data: portfolio } = useFetch<Portfolio>(`/portfolio?lang=${lang}`);
+  const projectTags = useProjectTags();
+  // Selected tags show even before (or without) the full list, so a shared link can always be undone.
+  const selected = selectedTags(params);
+  const chips = uniqueTags([...projectTags, ...selected]);
 
   const update = (changes: Record<string, string | null>) => {
     const next = new URLSearchParams(params);
@@ -45,20 +52,6 @@ export function ProjectsPage() {
             defaultValue={params.get('q') ?? ''}
             onChange={(event) => update({ q: event.target.value.trim() || null })}
           />
-          <input
-            aria-label={t.tagsPlaceholder}
-            placeholder={t.tagsPlaceholder}
-            defaultValue={params.get('tags') ?? ''}
-            onChange={(event) => update({ tags: event.target.value.replace(/\s+/g, '') || null })}
-          />
-          <label className="check">
-            <input
-              type="checkbox"
-              checked={params.get('tagsMode') === 'all'}
-              onChange={(event) => update({ tagsMode: event.target.checked ? 'all' : null })}
-            />
-            {t.allTagsRequired}
-          </label>
           <label className="check">
             <input
               type="checkbox"
@@ -75,6 +68,27 @@ export function ProjectsPage() {
             <option value="position">{t.manualOrder}</option>
             <option value="-createdAt">{t.newest}</option>
           </select>
+          <div className="tags tag-filter" role="group" aria-label={t.technologies}>
+            {chips.map((tag) => (
+              <button
+                key={tag}
+                type="button"
+                className="tag"
+                aria-pressed={selected.some((s) => sameTag(s, tag))}
+                onClick={() => setParams(toggleTag(params, tag), { replace: true })}
+              >
+                {tag}
+              </button>
+            ))}
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={params.get('tagsMode') === 'all'}
+                onChange={(event) => update({ tagsMode: event.target.checked ? 'all' : null })}
+              />
+              {t.allTagsRequired}
+            </label>
+          </div>
         </form>
 
         {loading && !data && <p className="status loading">{t.loading}</p>}
@@ -106,4 +120,28 @@ export function ProjectsPage() {
       </main>
     </>
   );
+}
+
+/** Tags of every visible project, not just the filtered page on screen. */
+function useProjectTags() {
+  const [tags, setTags] = useState<string[]>([]);
+  useEffect(() => {
+    let current = true;
+    (async () => {
+      const all: string[] = [];
+      // ponytail: reads every page of projects for their tags; a /projects/tags endpoint if that ever gets heavy.
+      for (let page = 1, total = 1; (page - 1) * 50 < total; page++) {
+        const data = await api<Page<Project>>(`/projects?pageSize=50&page=${page}`);
+        all.push(...data.items.flatMap((project) => project.tags));
+        total = data.total;
+      }
+      if (current) setTags(all);
+    })().catch(() => {
+      // Without the list, the chips of the selected tags still work.
+    });
+    return () => {
+      current = false;
+    };
+  }, []);
+  return tags;
 }
