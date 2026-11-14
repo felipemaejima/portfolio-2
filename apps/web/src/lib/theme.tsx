@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { flushSync } from 'react-dom';
 
 type Theme = 'light' | 'dark';
 
@@ -35,10 +36,22 @@ export function ThemeToggle({ labels }: { labels: { light: string; dark: string 
       className="lang-toggle"
       aria-label={labels[next]}
       title={labels[next]}
-      onClick={() => {
-        setTheme(next);
-        applyTheme(next);
-        saveTheme(next);
+      onClick={(event) => {
+        const toggle = () => {
+          setTheme(next);
+          applyTheme(next);
+          saveTheme(next);
+        };
+        if (!('startViewTransition' in document)) return toggle();
+        // The new theme grows as a circle from this button (styles.css, .theme-transition). CSSOM: allowed by the CSP.
+        const { left, top, width, height } = event.currentTarget.getBoundingClientRect();
+        const root = document.documentElement;
+        root.style.setProperty('--reveal-x', `${left + width / 2}px`);
+        root.style.setProperty('--reveal-y', `${top + height / 2}px`);
+        root.classList.add('theme-transition');
+        const done = () => root.classList.remove('theme-transition');
+        // flushSync: the icon swaps with the theme, inside the new snapshot.
+        document.startViewTransition(() => flushSync(toggle)).finished.then(done, done);
       }}
     >
       {/* A ☾ glyph comes from a symbol font and is a hairline at this size. */}

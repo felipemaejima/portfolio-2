@@ -112,7 +112,7 @@ export function PortfolioPage() {
                   <p className="eyebrow">{category.name}</p>
                   <ul className="tags">
                     {category.skills.map((skill) => (
-                      <li key={skill.id} className="tag">
+                      <li key={skill.id} className="tag skill">
                         {skill.name}
                       </li>
                     ))}
@@ -202,6 +202,7 @@ export function PortfolioPage() {
               {profile.email && (
                 <li>
                   {t.email} — <a href={`mailto:${profile.email}`}>{profile.email}</a>
+                  <CopyEmail email={profile.email} />
                 </li>
               )}
               {profile.phone && (
@@ -242,19 +243,20 @@ function Items({ text }: { text: string }) {
 
 function ContactForm() {
   const { t } = useLang();
-  const [status, setStatus] = useState<{ sending: boolean; message?: string }>({ sending: false });
+  const [status, setStatus] = useState<{ sending: boolean; message?: string; error?: boolean }>({ sending: false });
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const form = event.currentTarget;
     setStatus({ sending: true });
     try {
-      await api('/contact', { method: 'POST', json: Object.fromEntries(form) });
-      setStatus({ sending: false });
+      await api('/contact', { method: 'POST', json: Object.fromEntries(new FormData(form)) });
+      form.reset();
+      setStatus({ sending: false, message: t.messageSent });
     } catch (error) {
       // The delivery channel isn't decided yet: the API validates the message, then answers 501.
       const message = error instanceof ApiError && error.status !== 501 ? error.message : t.contactUnavailable;
-      setStatus({ sending: false, message });
+      setStatus({ sending: false, message, error: true });
     }
   };
 
@@ -275,11 +277,37 @@ function ContactForm() {
       <button className="button button-accent" type="submit" disabled={status.sending} aria-busy={status.sending}>
         {status.sending ? t.sending : t.send}
       </button>
-      {status.message && (
-        <p className="form-message" role="status">
-          {status.message}
-        </p>
-      )}
+      {/* Always there: a live region announces changes to its text, not its arrival. */}
+      <p className={status.error ? 'form-error' : 'form-message'} role="status">
+        {status.message}
+      </p>
     </form>
+  );
+}
+
+/** Where the Clipboard API exists (secure contexts). The status line next to it is the visible and announced feedback. */
+function CopyEmail({ email }: { email: string }) {
+  const { t } = useLang();
+  const [copied, setCopied] = useState(false);
+  if (!navigator.clipboard) return null;
+  const copy = async () => {
+    await navigator.clipboard.writeText(email);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+  return (
+    <>
+      <button
+        type="button"
+        className="button button-small copy"
+        aria-label={t.copyEmail}
+        onClick={() => void copy().catch(() => undefined)}
+      >
+        {t.copy}
+      </button>
+      <span className="copy-status" role="status">
+        {copied ? t.emailCopied : ''}
+      </span>
+    </>
   );
 }

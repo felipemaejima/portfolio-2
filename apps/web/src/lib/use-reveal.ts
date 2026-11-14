@@ -1,8 +1,12 @@
 import { useEffect } from 'react';
 
-/** Fades each `[data-reveal]` element in once, the first time it scrolls into view (styles.css). Re-scans when `ready` changes. */
+/**
+ * Fades each `[data-reveal]` element in once, the first time it scrolls into view (styles.css). Re-scans when `ready` changes.
+ * Fallback only: where scroll-driven animations exist, the CSS does it alone.
+ */
 export function useReveal(ready: unknown) {
   useEffect(() => {
+    if (CSS.supports('animation-timeline', 'view()')) return;
     const observer = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
