@@ -163,6 +163,8 @@ main:has(> .hero) { overflow-x: clip; }
 .tags { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; padding: 0; margin: 0; }
 .tag { font-size: 12px; padding: 5px 12px; border-radius: 6px; background: var(--color-surface); }
 .tag-accent { font-size: 11px; padding: 3px 9px; background: var(--color-accent-800); color: var(--color-accent-100); }
+.skill { transition: background-color 0.18s, color 0.18s; }
+.skill:hover { background: var(--color-accent-800); color: var(--color-accent-100); }
 
 .card { background: var(--color-surface); border-radius: 10px; overflow: hidden; }
 .project-card { display: flex; flex-direction: column; }
@@ -196,6 +198,9 @@ main:has(> .hero) { overflow-x: clip; }
 
 .contact { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; }
 .channels { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 10px; font-size: 14px; color: var(--color-neutral-400); }
+.channels .copy, .copy-status { margin-left: 8px; }
+.copy-status { display: inline-block; font-size: 12px; color: var(--color-accent-300); }
+.copy-status:not(:empty)::before { content: '✓' / ''; margin-right: 4px; }
 .site-footer { display: flex; justify-content: space-between; padding: 24px var(--gutter); border-top: 1px solid var(--color-divider); font-size: 12px; color: var(--color-neutral-500); }
 
 /* Forms */
@@ -351,10 +356,16 @@ main.section > h1 { font-size: 32px; margin-bottom: 24px; }
   .admin-list li { flex-wrap: wrap; }
 }
 
-/* Motion: one load sequence for the hero, then each section fades in once as it scrolls into view (use-reveal.ts). */
+/* Motion: one load sequence for the hero, then each section fades in as it scrolls into view. */
 @keyframes rise { from { opacity: 0; transform: translateY(12px); } }
 @keyframes fade { from { opacity: 0; } }
 @keyframes drift { 50% { transform: translate(-24px, -16px) rotate(60deg) scale(1.06); } }
+@keyframes shake { 20%, 60% { transform: translateX(-4px); } 40%, 80% { transform: translateX(4px); } }
+/* 142% of a circle's reference radius is the viewport's diagonal: the circle covers it from any point. */
+@keyframes reveal {
+  from { clip-path: circle(0 at var(--reveal-x) var(--reveal-y)); }
+  to { clip-path: circle(142% at var(--reveal-x) var(--reveal-y)); }
+}
 @media (prefers-reduced-motion: no-preference) {
   .hero > * { animation: rise 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
   .hero > :nth-child(2) { animation-delay: 70ms; }
@@ -363,17 +374,42 @@ main.section > h1 { font-size: 32px; margin-bottom: 24px; }
   /* Transform-only drift (composited); the blur stays static. */
   .hero::before { animation: fade 1.6s ease-out both, drift 28s ease-in-out infinite; }
   .hero::after { animation: fade 1.6s 0.3s ease-out both, spin 60s linear infinite; }
-  [data-reveal] { transition: opacity 0.6s ease-out, transform 0.6s cubic-bezier(0.2, 0.7, 0.2, 1); }
-  [data-reveal]:not(.revealed) { opacity: 0; transform: translateY(12px); }
+  /* Sections: driven by the scroll where supported; elsewhere they fade in once, when use-reveal.ts marks them. */
+  @supports (animation-timeline: view()) {
+    [data-reveal] { animation: rise linear both; animation-timeline: view(); animation-range: entry 0% entry 160px; }
+  }
+  @supports not (animation-timeline: view()) {
+    [data-reveal] { transition: opacity 0.6s ease-out, transform 0.6s cubic-bezier(0.2, 0.7, 0.2, 1); }
+    [data-reveal]:not(.revealed) { opacity: 0; transform: translateY(12px); }
+  }
   /* Newly loaded project cards (filters, pages). */
   .fade-items > * { animation: rise 0.45s ease-out both; }
   html:has(.site-header) { scroll-behavior: smooth; }
   .modal[open], .site-nav:popover-open { animation: rise 0.25s ease-out; }
   .modal[open]::backdrop { animation: fade 0.25s ease-out; }
+  /* Project cards: a soft accent glow follows the cursor (ProjectCard sets --glow-x/y); mouse and pen only. */
+  @media (hover: hover) and (pointer: fine) {
+    .project-card { isolation: isolate; }
+    .project-card::before {
+      content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none; opacity: 0; transition: opacity 0.3s;
+      background: radial-gradient(240px circle at var(--glow-x, 50%) var(--glow-y, 50%), color-mix(in srgb, var(--color-accent) 22%, transparent), transparent);
+    }
+    .project-card:hover::before { opacity: 1; }
+  }
+  /* Feedback as it appears: copied e-mail, contact form result (an error shakes). */
+  .copy-status:not(:empty), .contact .form-message:not(:empty) { animation: rise 0.3s ease-out; }
+  .contact .form-error:not(:empty) { animation: shake 0.4s ease-in-out; }
+  /* Theme switch (theme.tsx): the new theme grows as a circle from the toggle, over the old one. */
+  .theme-transition::view-transition-old(root), .theme-transition::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+  .theme-transition::view-transition-new(root) { animation: reveal 0.5s ease-in-out; }
+  /* The circle shows the new theme live: colors must not still be transitioning in it. */
+  .theme-transition * { transition: none !important; }
 }
 @media (prefers-reduced-motion: reduce) {
   .button[aria-busy='true']::before, .loading::before { animation-duration: 1.6s; }
   .project-card:has(.card-link:hover), .project-card:has(.card-link:hover) .project-image { transform: none; }
+  /* View Transitions (theme, page change) switch instantly. */
+  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none; }
 }
 .fade-items { transition: opacity 0.2s; }
 .fade-items[aria-busy='true'] { opacity: 0.5; }

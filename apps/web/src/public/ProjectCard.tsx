@@ -7,7 +7,16 @@ export function ProjectCard({ project }: { project: Project }) {
   const { t } = useLang();
   const dialogRef = useRef<HTMLDialogElement>(null);
   return (
-    <article className="card project-card">
+    <article
+      className="card project-card"
+      // Where the cursor is, for the hover glow (styles.css). CSSOM, not a style attribute: the CSP allows it.
+      onPointerMove={(event) => {
+        const card = event.currentTarget;
+        const { left, top } = card.getBoundingClientRect();
+        card.style.setProperty('--glow-x', `${event.clientX - left}px`);
+        card.style.setProperty('--glow-y', `${event.clientY - top}px`);
+      }}
+    >
       {project.imageUrl ? (
         <img className="project-image" src={project.imageUrl} alt="" loading="lazy" />
       ) : (
