@@ -33,6 +33,7 @@ export function PortfolioPage() {
 
   return (
     <>
+      <title>{`${profile.name} — ${profile.headline}`}</title>
       <SiteHeader name={profile.name} />
       <main>
         <section className="hero">
