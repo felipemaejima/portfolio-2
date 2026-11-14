@@ -24,7 +24,7 @@ describe('theme', () => {
     const themeColor = { content: '#161826', setAttribute(_: string, value: string) { this.content = value; } };
     vi.stubGlobal('document', { documentElement: { dataset: {} }, querySelector: () => themeColor });
     applyTheme('light');
-    expect(themeColor.content).toBe('#f6f6fa');
+    expect(themeColor.content).toBe('#eae9f0');
     applyTheme('dark');
     expect(themeColor.content).toBe('#161826');
   });
