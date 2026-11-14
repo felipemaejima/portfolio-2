@@ -141,7 +141,7 @@ A API (ver `backend.md`) e o futuro front em React só rodam localmente em Docke
 - **Prefixo global `/api`** em todos os ambientes (local e produção usam os mesmos caminhos; Swagger em `/api/docs` fora de produção; cookie de refresh em `/api/auth/refresh`).
 - **Token em `X-Authorization`** (ver acima); Swagger documenta o esquema.
 - **Upload com o arquivo cru no corpo** (`Content-Type: image/*`), limite **4 MB** (payload da Lambda é 6 MB e binários trafegam em base64, +33%). O tipo real continua vindo dos magic bytes.
-- **Cache**: toda resposta da API sai com `Cache-Control: no-store`, exceto GETs públicos (`/api/portfolio`, `/api/projects`, `/api/cv`) com `public, max-age=60`, respeitado pelos navegadores (a borda não cacheia a API, ver CloudFront); nada do admin é cacheado.
+- **Cache**: toda resposta da API sai com `Cache-Control: no-store`, exceto respostas de sucesso (200/304) dos GETs públicos (`/api/portfolio`, `/api/projects`, `/api/cv`) com `public, max-age=60` (erros continuam `no-store`), respeitado pelos navegadores (a borda não cacheia a API, ver CloudFront); nada do admin é cacheado.
 - **IP do cliente** para rate limit vem de um header confiável configurável (`CLIENT_IP_HEADER=x-viewer-ip` em produção; socket local em dev). `TRUST_PROXY`/`X-Forwarded-For` deixam de ser usados: as entradas iniciais do XFF são do cliente.
 - **Driver S3 do storage** (`STORAGE_DRIVER=s3`), com credenciais da role da Lambda (sem chaves em env). O banco guarda só a key; a URL pública vem de `UPLOADS_PUBLIC_URL`.
 - **Endpoint `GET /api/health`** público (app + `SELECT 1`); usado só pelo smoke test (sem sonda periódica, para o Neon hibernar).
@@ -195,7 +195,7 @@ A API (ver `backend.md`) e o futuro front em React só rodam localmente em Docke
   - upload cru acima de 4 MB → 413; corpo que não é imagem → 400;
   - `/api/health` 200.
   - Driver S3, OAC, WAF e cache de borda não são testáveis sem a AWS; ficam no smoke test.
-- **Seam 2 — smoke test pós-deploy** (target `smoke` e etapa do pipeline): `/api/health` 200; `/api/portfolio` 200 com `Cache-Control` público; `/api/admin/profile` 401 com `no-store`; `/api/docs` 404; raiz 200 com HSTS; deep link do SPA 200; `/uploads/<inexistente>` 404; HTTP → HTTPS 301.
+- **Seam 2 — smoke test pós-deploy** (target `smoke` e etapa do pipeline): `/api/health` 200; `/api/portfolio` 200 com `Cache-Control` público; `/api/cv` 200 com corpo PDF; `/api/admin/profile` 401 com `no-store`; `/api/docs` 404; raiz 200 com HSTS; deep link do SPA 200; `/uploads/<inexistente>` 404; HTTP → HTTPS 301.
 - **Checagem estática**: `terraform fmt`/`validate` (target `tf-fmt`) e actionlint + shellcheck nos workflows (target `ci-lint`).
 - Restore do backup executado manualmente uma vez em um branch do Neon e documentado.
 

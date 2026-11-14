@@ -14,3 +14,5 @@ infra/main/terraform.tfvars
 infra/main/.build/
 # Database dumps (restore procedure) never belong in git.
 *.dump
+# Claude Code subagent worktrees (temporary checkouts).
+.claude/worktrees/

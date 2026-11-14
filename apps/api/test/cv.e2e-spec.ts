@@ -16,6 +16,24 @@ describe('cv', () => {
   afterAll(() => app.close());
 
   it('generates a PDF and revalidates with ETag until content changes', async () => {
+    // With a profile there is text, so the PDF fonts actually load.
+    await http
+      .put('/api/admin/profile')
+      .set('X-Authorization', auth)
+      .send({
+        name: 'Ana Souza',
+        headline: lt('Desenvolvedora', 'Developer'),
+        summary: lt('Resumo com acentuação', 'Summary'),
+        about: [],
+        location: lt('São Paulo'),
+        availability: lt('CLT'),
+        workModality: lt('Remoto'),
+        spokenLanguages: lt('Português, inglês', 'Portuguese, English'),
+        email: 'ana@test.dev',
+        showEmail: true,
+        showPhone: false,
+      })
+      .expect(200);
     const created = await http
       .post('/api/admin/services')
       .set('X-Authorization', auth)
@@ -28,12 +46,20 @@ describe('cv', () => {
     const etag = first.headers.etag;
 
     await http.get('/api/cv?lang=pt').set('If-None-Match', etag).expect(304);
-    expect((await http.get('/api/cv?lang=en').expect(200)).headers.etag).not.toBe(etag);
+    const en = await http.get('/api/cv?lang=en').buffer(true).expect(200);
+    expect(en.headers['content-type']).toBe('application/pdf');
+    expect(en.body.subarray(0, 5).toString()).toBe('%PDF-');
+    expect(en.headers.etag).not.toBe(etag);
 
     await http.patch(`/api/admin/services/${created.body.id}`).set('X-Authorization', auth).send({ title: lt('Mentoria') }).expect(200);
     const afterUpdate = (await http.get('/api/cv?lang=pt').set('If-None-Match', etag).expect(200)).headers.etag;
 
     await http.delete(`/api/admin/services/${created.body.id}`).set('X-Authorization', auth).expect(204);
     await http.get('/api/cv?lang=pt').set('If-None-Match', afterUpdate).expect(200);
+  });
+
+  it('never serves an error as publicly cacheable', async () => {
+    const res = await http.get('/api/cv?lang=fr').expect(400);
+    expect(res.headers['cache-control']).toBe('no-store');
   });
 });
