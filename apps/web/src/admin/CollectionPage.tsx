@@ -88,6 +88,8 @@ export function CollectionPage({ collection }: { collection: Collection }) {
     if (ids.join() !== orderBeforeDrag.current) reorder(ids);
   };
 
+  const edit = (item: Item) => setEditing({ id: item.id, values: toFormValues(collection.fields, item) });
+
   const save = (event: FormEvent) => {
     event.preventDefault();
     if (!editing) return;
@@ -189,37 +191,50 @@ export function CollectionPage({ collection }: { collection: Collection }) {
                 <span className="drag-handle" aria-hidden="true" title="Arraste para reordenar">
                   ⠿
                 </span>
-                <span className="admin-list-summary">
+                <button type="button" className="admin-list-summary" onClick={() => edit(item)}>
                   {collection.summary(item)}
                   {!item.visible && <small> (oculto)</small>}
-                </span>
-                <button type="button" className="button button-small" aria-label="Subir" disabled={index === 0} onClick={() => move(items, index, -1)}>
-                  ↑
                 </button>
-                <button type="button" className="button button-small" aria-label="Descer" disabled={index === items.length - 1} onClick={() => move(items, index, 1)}>
-                  ↓
+                {/* Inline on wide screens; on narrow ones the ⋯ button opens them as a sheet (styles.css). Closes after any action. */}
+                <button type="button" className="button button-small item-menu-toggle" popoverTarget={`actions-${item.id}`} aria-label={`Ações: ${collection.summary(item)}`}>
+                  ⋯
                 </button>
-                <button
-                  type="button"
-                  className="button button-small"
-                  aria-busy={busy === `visible:${item.id}`}
-                  onClick={() => void run(`visible:${item.id}`, () => api(`${base}/${item.id}`, { method: 'PATCH', json: { visible: !item.visible }, auth: true }))}
-                >
-                  {item.visible ? 'Ocultar' : 'Mostrar'}
-                </button>
-                <button type="button" className="button button-small" onClick={() => setEditing({ id: item.id, values: toFormValues(collection.fields, item) })}>
-                  Editar
-                </button>
-                <button
-                  type="button"
-                  className="button button-small button-danger"
-                  aria-busy={busy === `delete:${item.id}`}
-                  onClick={() => {
-                    if (confirm('Excluir este item?')) void run(`delete:${item.id}`, () => api(`${base}/${item.id}`, { method: 'DELETE', auth: true }), 'Item excluído.');
+                <div
+                  id={`actions-${item.id}`}
+                  className="item-actions"
+                  popover="auto"
+                  onClick={(event) => {
+                    if (event.target instanceof HTMLButtonElement) event.currentTarget.hidePopover();
                   }}
                 >
-                  Excluir
-                </button>
+                  <button type="button" className="button button-small" aria-label="Subir" disabled={index === 0} onClick={() => move(items, index, -1)}>
+                    ↑
+                  </button>
+                  <button type="button" className="button button-small" aria-label="Descer" disabled={index === items.length - 1} onClick={() => move(items, index, 1)}>
+                    ↓
+                  </button>
+                  <button
+                    type="button"
+                    className="button button-small"
+                    aria-busy={busy === `visible:${item.id}`}
+                    onClick={() => void run(`visible:${item.id}`, () => api(`${base}/${item.id}`, { method: 'PATCH', json: { visible: !item.visible }, auth: true }))}
+                  >
+                    {item.visible ? 'Ocultar' : 'Mostrar'}
+                  </button>
+                  <button type="button" className="button button-small" onClick={() => edit(item)}>
+                    Editar
+                  </button>
+                  <button
+                    type="button"
+                    className="button button-small button-danger"
+                    aria-busy={busy === `delete:${item.id}`}
+                    onClick={() => {
+                      if (confirm('Excluir este item?')) void run(`delete:${item.id}`, () => api(`${base}/${item.id}`, { method: 'DELETE', auth: true }), 'Item excluído.');
+                    }}
+                  >
+                    Excluir
+                  </button>
+                </div>
               </li>
             ))}
           </ol>
