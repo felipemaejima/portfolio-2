@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
 import { ApiError, api } from '../lib/api';
 import { formatPeriod, useLang } from '../lib/i18n';
@@ -14,6 +14,12 @@ export function PortfolioPage() {
   const { lang, t } = useLang();
   const { data, error, loading } = useFetch<Portfolio>(`/portfolio?lang=${lang}`);
   useReveal(data);
+  // The sections only exist once the portfolio loads, after the browser gave up on the URL's #anchor (a nav link from
+  // another page, a shared link): go there now, once. The CSS sets how (smooth unless reduced motion, under the header).
+  const ready = Boolean(data?.profile);
+  useEffect(() => {
+    if (ready) document.getElementById(location.hash.slice(1))?.scrollIntoView();
+  }, [ready]);
 
   if (!data) {
     return (
