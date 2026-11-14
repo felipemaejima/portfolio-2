@@ -121,8 +121,8 @@ Passo a passo da primeira implantação, operação e restauração de backup: [
 
 | Workflow | Quando | O que faz |
 |---|---|---|
-| `api.yml` | push na `main` em `apps/api` | lint + e2e → imagem arm64 no ECR → migrations no Neon → atualiza a Lambda → smoke |
-| `web.yml` | push na `main` em `apps/web` | lint + testes → build → S3 → invalida o CloudFront |
+| `api.yml` | push em qualquer branch em `apps/api` | lint + e2e; **só na `main`**, e só se passarem: imagem arm64 no ECR → migrations no Neon → atualiza a Lambda → smoke |
+| `web.yml` | push em qualquer branch em `apps/web` | lint + testes → build; **só na `main`**: S3 → invalida o CloudFront |
 | `backup.yml` | diário | `pg_dump` do Neon para um bucket S3 |
 
 O GitHub obtém credenciais temporárias por **OIDC**. Cada role confia só neste repositório (IDs imutáveis) e no

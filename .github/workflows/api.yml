@@ -2,7 +2,7 @@ name: api
 
 on:
   push:
-    branches: [main]
+    branches: ["**"] # every branch (not tags) runs the tests; only main deploys (see the deploy job)
     paths:
       - apps/api/**
       - package.json
@@ -12,10 +12,10 @@ on:
       - .github/workflows/api.yml
   workflow_dispatch:
 
-# Deploys run one at a time and are never cancelled halfway (a migration may be running).
+# Branch runs: a newer push cancels the previous one. Main is never cancelled (its run carries the deploy).
 concurrency:
-  group: api-deploy
-  cancel-in-progress: false
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 # Actions are pinned to commit SHAs (tags can be moved to malicious code; these jobs get AWS credentials).
 permissions:
@@ -54,6 +54,11 @@ jobs:
 
   deploy:
     needs: test
+    if: github.ref == 'refs/heads/main'
+    # Deploys run one at a time and are never cancelled halfway (a migration may be running).
+    concurrency:
+      group: api-deploy
+      cancel-in-progress: false
     # Native ARM runner: builds the arm64 (Graviton) image without emulation.
     runs-on: ubuntu-24.04-arm
     # The AWS deploy role only trusts this environment (restricted to main, optional manual approval in GitHub).
