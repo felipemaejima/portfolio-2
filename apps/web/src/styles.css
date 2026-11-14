@@ -3,21 +3,21 @@
    visitor chose it with the theme toggle (data-theme, see lib/theme.tsx). */
 :root {
   color-scheme: dark;
-  --color-bg: light-dark(#f6f6fa, #161826);
-  --color-surface: light-dark(#ffffff, #232532);
-  --color-surface-2: light-dark(#eeeef5, #2b2d3d);
+  --color-bg: light-dark(#eae9f0, #161826);
+  --color-surface: light-dark(#f8f7fb, #232532);
+  --color-surface-2: light-dark(#e0dfe8, #2b2d3d);
   --color-text: light-dark(#1b1d2b, #e9e9ed);
   --color-divider: light-dark(rgba(27, 29, 43, 0.14), rgba(233, 233, 237, 0.16));
   --color-accent: light-dark(#6b5fc0, #9184d9);
   --color-accent-100: light-dark(#2e2768, #f5f4ff);
   --color-accent-300: light-dark(#5446a8, #d2cefd);
-  --color-accent-800: light-dark(#e4e0fa, #423a6a);
+  --color-accent-800: light-dark(#dfdaf7, #423a6a);
   --color-neutral-300: light-dark(#3c3f50, #cfd3e5);
   --color-neutral-400: light-dark(#4f5367, #b2b6ca);
-  --color-neutral-500: light-dark(#62667b, #9397ab);
-  --color-neutral-600: light-dark(#73778b, #75798c);
-  --color-neutral-800: light-dark(#d9dbe5, #3f424d);
-  --color-danger: light-dark(#c5352b, #f28b82);
+  --color-neutral-500: light-dark(#575b6f, #9397ab);
+  --color-neutral-600: light-dark(#5e6276, #75798c);
+  --color-neutral-800: light-dark(#d5d6e1, #3f424d);
+  --color-danger: light-dark(#b42f29, #f28b82);
   --shadow: light-dark(rgba(27, 29, 43, 0.25), rgba(0, 0, 0, 0.7));
   --font: 'Inter Variable', system-ui, sans-serif;
   --gutter: 64px;
