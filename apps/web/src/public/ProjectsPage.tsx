@@ -1,6 +1,6 @@
 import { useSearchParams } from 'react-router';
 import { useLang } from '../lib/i18n';
-import type { Page, Project } from '../lib/types';
+import type { Page, Portfolio, Project } from '../lib/types';
 import { useFetch } from '../lib/use-fetch';
 import { ProjectCard } from './ProjectCard';
 import { SiteHeader } from './SiteHeader';
@@ -17,6 +17,8 @@ export function ProjectsPage() {
   query.set('lang', lang);
   query.set('pageSize', String(PAGE_SIZE));
   const { data, error, loading } = useFetch<Page<Project>>(`/projects?${query}`);
+  // For the header: the owner's name and the home page's sections (usually still cached from the home page).
+  const { data: portfolio } = useFetch<Portfolio>(`/portfolio?lang=${lang}`);
 
   const update = (changes: Record<string, string | null>) => {
     const next = new URLSearchParams(params);
@@ -32,7 +34,7 @@ export function ProjectsPage() {
 
   return (
     <>
-      <SiteHeader />
+      <SiteHeader portfolio={portfolio} />
       <main className="section">
         <h1>{t.allProjects}</h1>
         <form className="filters" onSubmit={(event) => event.preventDefault()}>

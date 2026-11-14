@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
 import { ApiError, api } from '../lib/api';
 import { formatPeriod, useLang } from '../lib/i18n';
+import { visibleSections } from '../lib/sections';
 import { paragraphs, splitItems } from '../lib/text';
 import type { Portfolio } from '../lib/types';
 import { useFetch } from '../lib/use-fetch';
@@ -31,12 +32,13 @@ export function PortfolioPage() {
       </>
     );
   }
+  const sections = visibleSections(data);
   const skills = skillCategories.filter((category) => category.skills.length > 0);
 
   return (
     <>
       <title>{`${profile.name} — ${profile.headline}`}</title>
-      <SiteHeader name={profile.name} />
+      <SiteHeader portfolio={data} />
       <main>
         <section className="hero">
           <p className="eyebrow">
@@ -101,7 +103,7 @@ export function PortfolioPage() {
           </div>
         </section>
 
-        {skills.length > 0 && (
+        {sections.includes('skills') && (
           <section id="skills" className="section" data-reveal>
             <h2>{t.skills}</h2>
             <div className="grid grid-4">
@@ -135,7 +137,7 @@ export function PortfolioPage() {
           </div>
         </section>
 
-        {experiences.length > 0 && (
+        {sections.includes('experience') && (
           <section id="experience" className="section" data-reveal>
             <h2>{t.professionalExperience}</h2>
             <ol className="timeline">
@@ -159,7 +161,7 @@ export function PortfolioPage() {
           </section>
         )}
 
-        {education.length > 0 && (
+        {sections.includes('education') && (
           <section id="education" className="section" data-reveal>
             <h2>{t.education}</h2>
             <ol className="timeline">
@@ -178,7 +180,7 @@ export function PortfolioPage() {
           </section>
         )}
 
-        {services.length > 0 && (
+        {sections.includes('services') && (
           <section id="services" className="section" data-reveal>
             <h2>{t.services}</h2>
             <div className="grid grid-4">
