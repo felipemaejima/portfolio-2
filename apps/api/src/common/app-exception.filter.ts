@@ -1,5 +1,6 @@
 import { ArgumentsHost, Catch, ConflictException, HttpException, NotFoundException } from '@nestjs/common';
 import { BaseExceptionFilter } from '@nestjs/core';
+import type { Response } from 'express';
 import { Prisma } from '../generated/prisma/client';
 
 const PRISMA_ERRORS: Record<string, () => HttpException> = {
@@ -23,6 +24,9 @@ const isClientHttpError = (error: unknown): error is ClientHttpError =>
 @Catch()
 export class AppExceptionFilter extends BaseExceptionFilter {
   catch(error: unknown, host: ArgumentsHost) {
+    // @Header('Cache-Control', PUBLIC_CACHE) is applied before the handler runs: errors must not inherit it.
+    const res = host.switchToHttp().getResponse<Response>();
+    if (!res.headersSent) res.setHeader('Cache-Control', 'no-store');
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
       return super.catch(PRISMA_ERRORS[error.code]?.() ?? error, host);
     }

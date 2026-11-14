@@ -54,4 +54,9 @@ describe('cv', () => {
     await http.delete(`/api/admin/services/${created.body.id}`).set('X-Authorization', auth).expect(204);
     await http.get('/api/cv?lang=pt').set('If-None-Match', afterUpdate).expect(200);
   });
+
+  it('never serves an error as publicly cacheable', async () => {
+    const res = await http.get('/api/cv?lang=fr').expect(400);
+    expect(res.headers['cache-control']).toBe('no-store');
+  });
 });
