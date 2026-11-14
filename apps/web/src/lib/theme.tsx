@@ -41,7 +41,14 @@ export function ThemeToggle({ labels }: { labels: { light: string; dark: string 
         saveTheme(next);
       }}
     >
-      {theme === 'light' ? '☾' : '☀'}
+      {/* A ☾ glyph comes from a symbol font and is a hairline at this size. */}
+      {theme === 'light' ? (
+        <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true">
+          <path fill="currentColor" d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+        </svg>
+      ) : (
+        '☀'
+      )}
     </button>
   );
 }
