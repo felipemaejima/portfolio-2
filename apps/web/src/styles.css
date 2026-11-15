@@ -350,6 +350,8 @@ main.section > h1 { font-size: 32px; margin-bottom: 24px; }
 .list-item { display: flex; gap: 10px; align-items: flex-start; }
 .list-item .localized { flex: 1; }
 .media-preview { max-height: 140px; width: auto; border-radius: 8px; }
+.media.drop-target { border: 1px dashed var(--color-accent); background: var(--color-surface); }
+.admin-list-summary .tag { display: inline-block; margin-left: 8px; white-space: nowrap; }
 
 /* Below this the inline nav no longer fits on one row: one row of 44px targets, sections in a popover menu. */
 @media (max-width: 1200px) {

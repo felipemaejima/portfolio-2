@@ -9,7 +9,7 @@ const CSP = [
   "default-src 'self'",
   "script-src 'self'",
   "style-src 'self'",
-  "img-src 'self' data:",
+  "img-src 'self' data: blob:", // blob: the admin's preview of an image being uploaded
   "font-src 'self' data:",
   "connect-src 'self'",
   "object-src 'none'",
