@@ -23,7 +23,7 @@ export const COLLECTIONS: Collection[] = [
     path: 'social-links',
     title: 'Links sociais',
     fields: [
-      { key: 'label', label: 'Nome (ex.: GitHub)', type: 'text', required: true },
+      { key: 'label', label: 'Nome (ex.: GitHub)', type: 'text', required: true, maxLength: 60 },
       { key: 'url', label: 'URL', type: 'url', required: true },
     ],
     summary: (item) => `${str(item.label)} — ${str(item.url)}`,
@@ -38,7 +38,7 @@ export const COLLECTIONS: Collection[] = [
     path: 'skills',
     title: 'Habilidades',
     fields: [
-      { key: 'name', label: 'Tecnologia', type: 'text', required: true },
+      { key: 'name', label: 'Tecnologia', type: 'text', required: true, maxLength: 60 },
       {
         key: 'categoryId',
         label: 'Categoria',
@@ -71,7 +71,7 @@ export const COLLECTIONS: Collection[] = [
     title: 'Experiência',
     fields: [
       { key: 'role', label: 'Cargo', type: 'localized', required: true },
-      { key: 'company', label: 'Empresa', type: 'text', required: true },
+      { key: 'company', label: 'Empresa', type: 'text', required: true, maxLength: 120 },
       { key: 'bullets', label: 'Atividades', type: 'localizedList' },
       { key: 'startDate', label: 'Início', type: 'date', required: true },
       { key: 'endDate', label: 'Fim (vazio = atual)', type: 'date' },
@@ -84,7 +84,7 @@ export const COLLECTIONS: Collection[] = [
     title: 'Formação',
     fields: [
       { key: 'title', label: 'Título', type: 'localized', required: true },
-      { key: 'institution', label: 'Instituição', type: 'text', required: true },
+      { key: 'institution', label: 'Instituição', type: 'text', required: true, maxLength: 120 },
       {
         key: 'kind',
         label: 'Tipo',
@@ -114,7 +114,7 @@ export const COLLECTIONS: Collection[] = [
 ];
 
 export const PROFILE_FIELDS: Field[] = [
-  { key: 'name', label: 'Nome', type: 'text', required: true },
+  { key: 'name', label: 'Nome', type: 'text', required: true, maxLength: 120 },
   { key: 'headline', label: 'Título (ex.: Desenvolvedor Full-Stack)', type: 'localized', required: true },
   { key: 'summary', label: 'Resumo (hero e CV)', type: 'localizedText', required: true },
   { key: 'about', label: 'Sobre mim (parágrafos)', type: 'localizedList' },
@@ -123,7 +123,7 @@ export const PROFILE_FIELDS: Field[] = [
   { key: 'workModality', label: 'Modalidade', type: 'localized', required: true },
   { key: 'spokenLanguages', label: 'Idiomas', type: 'localized', required: true },
   { key: 'email', label: 'E-mail', type: 'email' },
-  { key: 'phone', label: 'Telefone', type: 'text' },
+  { key: 'phone', label: 'Telefone', type: 'text', maxLength: 40 },
   { key: 'showEmail', label: 'Mostrar e-mail no site e no CV', type: 'checkbox' },
   { key: 'showPhone', label: 'Mostrar telefone no site e no CV', type: 'checkbox' },
   { key: 'photoMediaId', label: 'Foto', type: 'media', urlKey: 'photoUrl' },

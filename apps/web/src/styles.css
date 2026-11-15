@@ -227,6 +227,7 @@ input, textarea, select {
 input:hover, textarea:hover, select:hover { border-color: var(--color-neutral-600); }
 input:focus, textarea:focus, select:focus { border-color: var(--color-accent); }
 input:disabled, textarea:disabled, select:disabled { opacity: 0.6; }
+input:user-invalid, textarea:user-invalid, select:user-invalid { border-color: var(--color-danger); }
 .form .check, .filters .check { flex-direction: row; align-items: center; gap: 8px; font-size: 13px; color: var(--color-neutral-300); }
 .form-message { font-size: 13px; color: var(--color-accent-300); margin: 0; }
 .form-error { font-size: 13px; color: var(--color-danger); margin: 0; }
@@ -250,7 +251,7 @@ button.tag[aria-pressed='true']::before { content: '✓' / ''; margin-right: 6px
 main.section > h1 { font-size: 32px; margin-bottom: 24px; }
 
 /* Admin */
-.login { min-height: 100vh; display: grid; place-content: center; justify-items: center; gap: 20px; padding: 16px; }
+.login { min-height: 100dvh; display: grid; place-content: center; justify-items: center; gap: 20px; padding: 16px; }
 .login-card {
   width: min(380px, calc(100vw - 32px)); padding: 32px; background: var(--color-surface);
   border: 1px solid var(--color-divider); border-radius: 14px; box-shadow: 0 24px 60px -30px var(--shadow);
@@ -261,18 +262,18 @@ main.section > h1 { font-size: 32px; margin-bottom: 24px; }
 .back-link { font-size: 13px; color: var(--color-neutral-500); text-decoration: none; transition: color 0.18s; }
 .back-link:hover { color: var(--color-accent-300); }
 
-.admin { display: grid; grid-template-columns: auto 1fr; min-height: 100vh; }
+.admin { display: grid; grid-template-columns: auto 1fr; min-height: 100dvh; }
 .admin-nav {
-  position: sticky; top: 0; height: 100vh; overflow-y: auto; width: 220px;
-  display: flex; flex-direction: column; gap: 16px; padding: 16px; border-right: 1px solid var(--color-divider);
-  transition: width 0.2s ease;
+  position: sticky; top: 0; height: 100dvh; overflow-y: auto; width: 220px;
+  display: flex; flex-direction: column; gap: 20px; padding: 16px; border-right: 1px solid var(--color-divider);
 }
-.admin-nav.collapsed { width: 64px; }
-.nav-toggle { align-self: flex-end; min-width: 32px; }
-.admin-nav.collapsed .nav-toggle { align-self: center; }
-.admin-menu { display: flex; flex-direction: column; gap: 20px; flex: 1; }
-.admin-menu[hidden] { display: none; }
-.admin-nav .back-link { padding: 0 10px; }
+/* The menu is also the phones' drawer popover (AdminApp): undo the UA popover box here. */
+.admin-menu {
+  display: flex; flex-direction: column; gap: 20px;
+  position: static; width: auto; height: auto; margin: 0; padding: 0; border: 0; overflow: visible; color: inherit; background: none;
+}
+.admin-nav .brand { font-size: 16px; }
+.admin-nav .brand, .admin-nav .back-link { padding: 0 10px; }
 .admin-nav nav { display: flex; flex-direction: column; gap: 2px; }
 .admin-nav nav a {
   text-decoration: none; font-size: 14px; padding: 7px 10px; border-radius: 6px; color: var(--color-neutral-400);
@@ -282,6 +283,8 @@ main.section > h1 { font-size: 32px; margin-bottom: 24px; }
 .admin-nav nav a.active { background: var(--color-surface); color: var(--color-text); box-shadow: inset 2px 0 var(--color-accent); }
 .admin-main { padding: 32px 40px; max-width: 1320px; width: 100%; min-width: 0; container-type: inline-size; }
 .admin-menu-footer { margin-top: auto; display: flex; gap: 8px; align-items: center; }
+.admin-nav .lang-toggle { display: inline-flex; align-items: center; justify-content: center; }
+.admin-nav .menu-toggle { display: none; }
 .admin-main h1 { font-size: 28px; }
 .admin-title { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 20px; }
 .admin-form {
@@ -291,7 +294,7 @@ main.section > h1 { font-size: 32px; margin-bottom: 24px; }
 .admin-form h1, .admin-form h2 { margin-bottom: 8px; }
 .admin-form:not(.field-grid) { max-width: 560px; }
 .modal {
-  width: min(1040px, calc(100vw - 32px)); container-type: inline-size; max-height: calc(100vh - 48px); padding: 0; overflow: auto;
+  width: min(1040px, calc(100vw - 32px)); container-type: inline-size; max-height: calc(100dvh - 48px); padding: 0; overflow: auto;
   color: var(--color-text); background: var(--color-surface-2); border: 1px solid var(--color-divider); border-radius: 14px;
   box-shadow: 0 30px 80px -30px var(--shadow);
 }
@@ -328,7 +331,18 @@ main.section > h1 { font-size: 32px; margin-bottom: 24px; }
 .drag-handle { color: var(--color-neutral-600); cursor: grab; padding: 4px 6px; font-size: 16px; line-height: 1; user-select: none; }
 .admin-list li:hover .drag-handle { color: var(--color-neutral-300); }
 .bare:disabled .drag-handle { cursor: default; }
-.admin-list-summary { flex: 1; font-size: 14px; min-width: 0; overflow-wrap: anywhere; }
+.admin-list-summary {
+  flex: 1; min-width: 0; overflow-wrap: anywhere; align-self: stretch; padding: 0; border: 0; background: none;
+  font: 14px var(--font); color: inherit; text-align: left; cursor: pointer;
+}
+/* Item actions: inline here; on phones a sheet popover opened by ⋯. Undo the UA popover box. */
+.item-actions {
+  display: flex; gap: 8px; align-items: center;
+  position: static; width: auto; height: auto; margin: 0; padding: 0; border: 0; overflow: visible; color: inherit; background: none;
+}
+.admin-list-summary:hover:not(:disabled) { color: var(--color-accent-300); }
+.admin-list-summary:disabled { cursor: default; }
+.item-menu-toggle { display: none; }
 .hidden-item .admin-list-summary { opacity: 0.55; }
 .empty { padding: 32px; text-align: center; border: 1px dashed var(--color-divider); border-radius: 10px; }
 .localized { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -364,13 +378,48 @@ main.section > h1 { font-size: 32px; margin-bottom: 24px; }
   .copy { width: 44px; height: 44px; }
   .channels { gap: 0; }
   .channels li { line-height: 44px; }
-  .about, .facts, .contact, .grid-3, .grid-4, .timeline > li, .admin, .localized { grid-template-columns: 1fr; }
+  .about, .facts, .contact, .grid-3, .grid-4, .timeline > li, .localized { grid-template-columns: 1fr; }
   .about { gap: 24px; }
-  .admin-nav, .admin-nav.collapsed { position: static; height: auto; width: auto; border-right: none; border-bottom: 1px solid var(--color-divider); }
-  .admin-nav.collapsed .nav-toggle { align-self: flex-start; }
-  .admin-nav nav { flex-direction: row; flex-wrap: wrap; }
+  /* Admin: a sticky top bar (brand, Sair, theme, menu button); the menu opens as a drawer below it. Block, not grid: a grid
+     item would only stick within its own row. */
+  .admin { display: block; }
+  .admin-nav {
+    z-index: 10; height: var(--header-height); width: auto; overflow: visible; flex-direction: row; align-items: center; gap: 8px;
+    padding: 0 var(--gutter); border-right: none; border-bottom: 1px solid var(--color-divider);
+    background: color-mix(in srgb, var(--color-bg) 80%, transparent); backdrop-filter: blur(12px);
+  }
+  .admin-nav .brand { margin-right: auto; padding: 0; }
+  .admin-menu-footer { margin: 0; }
+  .admin-nav .button, .admin-nav .lang-toggle { min-height: 44px; min-width: 44px; }
+  .admin-nav .menu-toggle { display: inline-flex; font-size: 18px; }
+  .admin-menu:not(:popover-open) { display: none; }
+  .admin-menu {
+    position: fixed; inset: var(--header-height) 0 0 auto; width: min(300px, 85vw); padding: 16px; overflow-y: auto;
+    background: var(--color-surface); border-left: 1px solid var(--color-divider); box-shadow: 0 24px 60px -30px var(--shadow);
+  }
+  .admin-menu::backdrop { top: var(--header-height); background: rgba(10, 11, 20, 0.4); }
+  .admin-nav nav a { display: flex; align-items: center; min-height: 44px; }
+  .admin-nav nav a:hover, .admin-nav nav a.active { background: var(--color-surface-2); }
   .admin-main { padding: 24px var(--gutter); }
-  .admin-list li { flex-wrap: wrap; }
+  .admin-list li { padding: 6px 6px 6px 12px; }
+  .item-menu-toggle { display: inline-flex; font-size: 16px; }
+  .item-actions:not(:popover-open) { display: none; }
+  .item-actions {
+    position: fixed; inset: auto 0 0; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 16px var(--gutter);
+    background: var(--color-surface); border-top: 1px solid var(--color-divider); border-radius: 14px 14px 0 0;
+  }
+  .item-actions .button { min-height: 44px; font-size: 14px; }
+  .item-actions .button-danger { grid-column: 1 / -1; }
+  .item-actions::backdrop { background: rgba(10, 11, 20, 0.4); }
+  .admin-list li:has(.item-actions:popover-open) { border-color: var(--color-accent); }
+  .modal { width: 100%; height: 100dvh; max-width: none; max-height: none; margin: 0; border: 0; border-radius: 0; }
+}
+
+/* Touch screens: 44px targets in the admin, 16px inputs (iOS zooms into smaller ones), no drag (the ↑/↓ actions remain). */
+@media (pointer: coarse) {
+  input, textarea, select { font-size: 16px; }
+  .admin .button, .admin .lang-toggle { min-height: 44px; min-width: 44px; }
+  .drag-handle { display: none; }
 }
 
 /* Motion: one load sequence for the hero, then each section fades in as it scrolls into view. */

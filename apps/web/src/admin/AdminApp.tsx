@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, NavLink, Navigate, Route, Routes, useParams } from 'react-router';
-import { login, logout, refreshSession } from '../lib/api';
+import { ApiError, login, logout, refreshSession } from '../lib/api';
 import { ThemeToggle } from '../lib/theme';
 import { AccountPage } from './AccountPage';
 import { CollectionPage } from './CollectionPage';
@@ -11,7 +11,6 @@ import { ProfilePage } from './ProfilePage';
 export function AdminApp() {
   const [session, setSession] = useState<'checking' | 'in' | 'out'>('checking');
   const [notice, setNotice] = useState<string>();
-  const [navOpen, setNavOpen] = useState(initialNavOpen);
 
   useEffect(() => {
     refreshSession().then((ok) => setSession(ok ? 'in' : 'out'), () => setSession('out'));
@@ -27,26 +26,17 @@ export function AdminApp() {
 
   return (
     <div className="admin">
-      <aside className={navOpen ? 'admin-nav' : 'admin-nav collapsed'}>
-        <button
-          type="button"
-          className="button button-small nav-toggle"
-          aria-expanded={navOpen}
-          aria-controls="admin-menu"
-          aria-label={navOpen ? 'Recolher menu' : 'Abrir menu'}
-          title={navOpen ? 'Recolher menu' : 'Abrir menu'}
-          onClick={() => {
-            setNavOpen(!navOpen);
-            try {
-              localStorage.setItem(NAV_KEY, String(!navOpen));
-            } catch {
-              // Storage blocked: the choice just isn't remembered.
-            }
+      {/* Desktop: a sidebar. Phones: a top bar (Sair and theme always in it) whose menu button opens the nav as a drawer (styles.css). */}
+      <aside className="admin-nav">
+        <span className="brand">Painel</span>
+        <div
+          id="admin-menu"
+          className="admin-menu"
+          popover="auto"
+          onClick={(event) => {
+            if (event.target instanceof HTMLAnchorElement) event.currentTarget.hidePopover();
           }}
         >
-          {navOpen ? '«' : '☰'}
-        </button>
-        <div id="admin-menu" className="admin-menu" hidden={!navOpen}>
           <Link to="/" className="back-link">
             ← Ver site
           </Link>
@@ -61,13 +51,16 @@ export function AdminApp() {
             ))}
             <NavLink to="/admin/conta">Senha</NavLink>
           </nav>
-          <div className="admin-menu-footer">
-            <button type="button" className="button button-small" onClick={() => void logout().finally(() => endSession())}>
-              Sair
-            </button>
-            <ThemeToggle labels={{ light: 'Usar tema claro', dark: 'Usar tema escuro' }} />
-          </div>
         </div>
+        <div className="admin-menu-footer">
+          <button type="button" className="button button-small" onClick={() => void logout().finally(() => endSession())}>
+            Sair
+          </button>
+          <ThemeToggle labels={{ light: 'Usar tema claro', dark: 'Usar tema escuro' }} />
+        </div>
+        <button type="button" className="lang-toggle menu-toggle" popoverTarget="admin-menu" aria-label="Menu">
+          ☰
+        </button>
       </aside>
       <main className="admin-main">
         <Routes>
@@ -78,19 +71,6 @@ export function AdminApp() {
       </main>
     </div>
   );
-}
-
-const NAV_KEY = 'admin-nav-open';
-
-/** Remembered choice; otherwise open on desktop, collapsed on phones. */
-function initialNavOpen() {
-  try {
-    const saved = localStorage.getItem(NAV_KEY);
-    if (saved) return saved === 'true';
-  } catch {
-    // Storage blocked: fall back to the screen size.
-  }
-  return !matchMedia('(max-width: 860px)').matches;
 }
 
 function CollectionRoute() {
@@ -111,7 +91,7 @@ function LoginPage({ notice, onLoggedIn }: { notice?: string; onLoggedIn: () => 
       await login(form.get('email') as string, form.get('password') as string);
       onLoggedIn();
     } catch (e) {
-      setError((e as Error).message);
+      setError(e instanceof ApiError && e.status === 401 ? 'E-mail ou senha incorretos.' : (e as Error).message);
       setSending(false);
     }
   };

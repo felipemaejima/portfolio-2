@@ -5,15 +5,17 @@ import { FieldInput, toFormValues, toPayload } from './fields';
 
 export function ProfilePage() {
   const [values, setValues] = useState<Record<string, unknown>>();
-  const [status, setStatus] = useState<string>();
+  const [error, setError] = useState<string>();
+  const [notice, setNotice] = useState<string>();
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     api<Record<string, unknown>>('/admin/profile', { auth: true }).then(
       (profile) => setValues(toFormValues(PROFILE_FIELDS, profile)),
       // No profile yet: start from an empty form (the first save creates it).
       (error: unknown) =>
-        error instanceof ApiError && error.status === 404 ? setValues(toFormValues(PROFILE_FIELDS)) : setStatus((error as Error).message),
+        error instanceof ApiError && error.status === 404 ? setValues(toFormValues(PROFILE_FIELDS)) : setError((error as Error).message),
     );
   }, []);
 
@@ -21,31 +23,43 @@ export function ProfilePage() {
     event.preventDefault();
     if (!values) return;
     setSaving(true);
-    setStatus(undefined);
+    setError(undefined);
+    setNotice(undefined);
     try {
       await api('/admin/profile', { method: 'PUT', json: toPayload(PROFILE_FIELDS, values), auth: true });
-      setStatus('Perfil salvo.');
+      setNotice('Perfil salvo.');
     } catch (error) {
-      setStatus((error as Error).message);
+      setError((error as Error).message);
     } finally {
       setSaving(false);
     }
   };
 
-  if (!values) return <p className={status ? 'form-error' : 'muted loading'}>{status ?? 'Carregando…'}</p>;
+  if (!values) return <p className={error ? 'form-error' : 'muted loading'}>{error ?? 'Carregando…'}</p>;
   return (
     <form className="form admin-form field-grid" onSubmit={(event) => void save(event)}>
       <h1>Perfil</h1>
       {PROFILE_FIELDS.map((field) => (
-        <FieldInput key={field.key} field={field} values={values} onChange={(changes) => setValues({ ...values, ...changes })} />
+        <FieldInput
+          key={field.key}
+          field={field}
+          values={values}
+          onChange={(changes) => setValues((current) => current && { ...current, ...changes })}
+          onUploading={setUploading}
+        />
       ))}
       <div className="form-footer">
-        <button type="submit" className="button button-accent" disabled={saving} aria-busy={saving}>
+        <button type="submit" className="button button-accent" disabled={saving || uploading} aria-busy={saving}>
           {saving ? 'Salvando…' : 'Salvar'}
         </button>
-        {status && (
+        {error && (
+          <p className="form-error" role="alert">
+            {error}
+          </p>
+        )}
+        {notice && (
           <p className="form-message" role="status">
-            {status}
+            {notice}
           </p>
         )}
       </div>

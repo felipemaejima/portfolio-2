@@ -13,6 +13,7 @@ export function CollectionPage({ collection }: { collection: Collection }) {
   const [notice, setNotice] = useState<string>();
   // What is being saved: 'save', 'reorder', 'visible:<id>' or 'delete:<id>'. One change at a time.
   const [busy, setBusy] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
   const [dragId, setDragId] = useState<string | null>(null);
   const orderBeforeDrag = useRef('');
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -30,6 +31,7 @@ export function CollectionPage({ collection }: { collection: Collection }) {
 
   // The form lives in a native modal <dialog>: opened while `editing` is set (focus trap, Esc and backdrop for free).
   const isEditing = editing !== null;
+  const locked = busy === 'save' || uploading; // the form can't close mid-save or mid-upload
   useEffect(() => {
     const dialog = dialogRef.current;
     if (!dialog) return;
@@ -86,6 +88,8 @@ export function CollectionPage({ collection }: { collection: Collection }) {
     if (ids.join() !== orderBeforeDrag.current) reorder(ids);
   };
 
+  const edit = (item: Item) => setEditing({ id: item.id, values: toFormValues(collection.fields, item) });
+
   const save = (event: FormEvent) => {
     event.preventDefault();
     if (!editing) return;
@@ -115,14 +119,14 @@ export function CollectionPage({ collection }: { collection: Collection }) {
         ref={dialogRef}
         className="modal"
         aria-labelledby="modal-title"
-        // Esc: closes, unless a save is in flight.
-        onCancel={(event) => (busy === 'save' ? event.preventDefault() : setEditing(null))}
+        // Esc: closes, unless a save or an upload is in flight.
+        onCancel={(event) => (locked ? event.preventDefault() : setEditing(null))}
       >
         {editing && (
           <form className="form field-grid" onSubmit={save}>
             <div className="modal-header">
               <h2 id="modal-title">{editing.id ? 'Editar item' : 'Novo item'}</h2>
-              <button type="button" className="button button-small" aria-label="Fechar" disabled={busy === 'save'} onClick={() => setEditing(null)}>
+              <button type="button" className="button button-small" aria-label="Fechar" disabled={locked} onClick={() => setEditing(null)}>
                 ✕
               </button>
             </div>
@@ -131,7 +135,9 @@ export function CollectionPage({ collection }: { collection: Collection }) {
                 key={field.key}
                 field={field}
                 values={editing.values}
-                onChange={(changes) => setEditing({ ...editing, values: { ...editing.values, ...changes } })}
+                onUploading={setUploading}
+                // From the latest state: an upload finishing after more typing (or after the form closed) must not restore a stale copy.
+                onChange={(changes) => setEditing((current) => current && { ...current, values: { ...current.values, ...changes } })}
               />
             ))}
             {error && busy === null && (
@@ -140,10 +146,10 @@ export function CollectionPage({ collection }: { collection: Collection }) {
               </p>
             )}
             <div className="actions form-footer">
-              <button type="submit" className="button button-accent" disabled={busy !== null} aria-busy={busy === 'save'}>
+              <button type="submit" className="button button-accent" disabled={busy !== null || uploading} aria-busy={busy === 'save'}>
                 {busy === 'save' ? 'Salvando…' : 'Salvar'}
               </button>
-              <button type="button" className="button" disabled={busy === 'save'} onClick={() => setEditing(null)}>
+              <button type="button" className="button" disabled={locked} onClick={() => setEditing(null)}>
                 Cancelar
               </button>
             </div>
@@ -185,37 +191,50 @@ export function CollectionPage({ collection }: { collection: Collection }) {
                 <span className="drag-handle" aria-hidden="true" title="Arraste para reordenar">
                   ⠿
                 </span>
-                <span className="admin-list-summary">
+                <button type="button" className="admin-list-summary" onClick={() => edit(item)}>
                   {collection.summary(item)}
                   {!item.visible && <small> (oculto)</small>}
-                </span>
-                <button type="button" className="button button-small" aria-label="Subir" disabled={index === 0} onClick={() => move(items, index, -1)}>
-                  ↑
                 </button>
-                <button type="button" className="button button-small" aria-label="Descer" disabled={index === items.length - 1} onClick={() => move(items, index, 1)}>
-                  ↓
+                {/* Inline on wide screens; on narrow ones the ⋯ button opens them as a sheet (styles.css). Closes after any action. */}
+                <button type="button" className="button button-small item-menu-toggle" popoverTarget={`actions-${item.id}`} aria-label={`Ações: ${collection.summary(item)}`}>
+                  ⋯
                 </button>
-                <button
-                  type="button"
-                  className="button button-small"
-                  aria-busy={busy === `visible:${item.id}`}
-                  onClick={() => void run(`visible:${item.id}`, () => api(`${base}/${item.id}`, { method: 'PATCH', json: { visible: !item.visible }, auth: true }))}
-                >
-                  {item.visible ? 'Ocultar' : 'Mostrar'}
-                </button>
-                <button type="button" className="button button-small" onClick={() => setEditing({ id: item.id, values: toFormValues(collection.fields, item) })}>
-                  Editar
-                </button>
-                <button
-                  type="button"
-                  className="button button-small button-danger"
-                  aria-busy={busy === `delete:${item.id}`}
-                  onClick={() => {
-                    if (confirm('Excluir este item?')) void run(`delete:${item.id}`, () => api(`${base}/${item.id}`, { method: 'DELETE', auth: true }), 'Item excluído.');
+                <div
+                  id={`actions-${item.id}`}
+                  className="item-actions"
+                  popover="auto"
+                  onClick={(event) => {
+                    if (event.target instanceof HTMLButtonElement) event.currentTarget.hidePopover();
                   }}
                 >
-                  Excluir
-                </button>
+                  <button type="button" className="button button-small" aria-label="Subir" disabled={index === 0} onClick={() => move(items, index, -1)}>
+                    ↑
+                  </button>
+                  <button type="button" className="button button-small" aria-label="Descer" disabled={index === items.length - 1} onClick={() => move(items, index, 1)}>
+                    ↓
+                  </button>
+                  <button
+                    type="button"
+                    className="button button-small"
+                    aria-busy={busy === `visible:${item.id}`}
+                    onClick={() => void run(`visible:${item.id}`, () => api(`${base}/${item.id}`, { method: 'PATCH', json: { visible: !item.visible }, auth: true }))}
+                  >
+                    {item.visible ? 'Ocultar' : 'Mostrar'}
+                  </button>
+                  <button type="button" className="button button-small" onClick={() => edit(item)}>
+                    Editar
+                  </button>
+                  <button
+                    type="button"
+                    className="button button-small button-danger"
+                    aria-busy={busy === `delete:${item.id}`}
+                    onClick={() => {
+                      if (confirm('Excluir este item?')) void run(`delete:${item.id}`, () => api(`${base}/${item.id}`, { method: 'DELETE', auth: true }), 'Item excluído.');
+                    }}
+                  >
+                    Excluir
+                  </button>
+                </div>
               </li>
             ))}
           </ol>
