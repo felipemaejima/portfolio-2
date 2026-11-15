@@ -31,6 +31,10 @@ export function CollectionPage({ collection }: { collection: Collection }) {
 
   // The form lives in a native modal <dialog>: opened while `editing` is set (focus trap, Esc and backdrop for free).
   const isEditing = editing !== null;
+  // The last form stays rendered while the dialog fades out (styles.css), instead of emptying it mid-exit.
+  const [lastEditing, setLastEditing] = useState(editing);
+  if (editing && editing !== lastEditing) setLastEditing(editing);
+  const shown = editing ?? lastEditing;
   const locked = busy === 'save' || uploading; // the form can't close mid-save or mid-upload
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -122,10 +126,10 @@ export function CollectionPage({ collection }: { collection: Collection }) {
         // Esc: closes, unless a save or an upload is in flight.
         onCancel={(event) => (locked ? event.preventDefault() : setEditing(null))}
       >
-        {editing && (
+        {shown && (
           <form className="form field-grid" onSubmit={save}>
             <div className="modal-header">
-              <h2 id="modal-title">{editing.id ? 'Editar item' : 'Novo item'}</h2>
+              <h2 id="modal-title">{shown.id ? 'Editar item' : 'Novo item'}</h2>
               <button type="button" className="button button-small" aria-label="Fechar" disabled={locked} onClick={() => setEditing(null)}>
                 ✕
               </button>
@@ -134,7 +138,7 @@ export function CollectionPage({ collection }: { collection: Collection }) {
               <FieldInput
                 key={field.key}
                 field={field}
-                values={editing.values}
+                values={shown.values}
                 onUploading={setUploading}
                 // From the latest state: an upload finishing after more typing (or after the form closed) must not restore a stale copy.
                 onChange={(changes) => setEditing((current) => current && { ...current, values: { ...current.values, ...changes } })}
