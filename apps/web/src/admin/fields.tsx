@@ -1,4 +1,4 @@
-import { useEffect, useState, type ChangeEvent } from 'react';
+import { useEffect, useState, type ChangeEvent, type RefObject } from 'react';
 import { api } from '../lib/api';
 
 type LocalizedText = { pt: string; en?: string };
@@ -135,6 +135,23 @@ export function missingEnglish(fields: Field[], record: Values): boolean {
     if (field.type === 'localizedList') return ((value as LocalizedText[] | undefined) ?? []).some(lacksEn);
     return (field.type === 'localized' || field.type === 'localizedText') && lacksEn(value as LocalizedText | undefined);
   });
+}
+
+/**
+ * Ctrl+S / Cmd+S (while `active`) presses the form's submit button instead of the browser's "save page". Through the button,
+ * so a disabled one (saving, an image uploading) ignores it. On the window: focus may be on the page, not in the form.
+ */
+export function useSaveShortcut(submit: RefObject<HTMLButtonElement | null>, active = true) {
+  useEffect(() => {
+    if (!active) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.altKey || event.key.toLowerCase() !== 's') return;
+      event.preventDefault();
+      submit.current?.click();
+    };
+    addEventListener('keydown', onKeyDown);
+    return () => removeEventListener('keydown', onKeyDown);
+  }, [submit, active]);
 }
 
 /** `onUploading` reports an image upload in flight, so the form can hold save/cancel until it lands. */

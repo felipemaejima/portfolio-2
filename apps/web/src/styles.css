@@ -68,20 +68,13 @@ h3 { font-size: 16px; }
 /* Busy buttons stay readable (not faded like :disabled) and show the spinner. */
 .button[aria-busy='true'] { opacity: 1; cursor: progress; }
 
-/* Loading: spinner on busy buttons and in .loading messages. */
-.button[aria-busy='true']::before, .loading::before {
+/* Loading: spinner on busy buttons, in .loading messages and after the text of an admin row being saved. */
+.button[aria-busy='true']::before, .loading::before, .admin-list li[aria-busy='true'] .admin-list-summary::after {
   content: ''; flex: none; width: 1em; height: 1em; border-radius: 50%;
   border: 2px solid currentColor; border-right-color: transparent; animation: spin 0.7s linear infinite;
 }
 .loading { display: flex; align-items: center; gap: 10px; }
 @keyframes spin { to { transform: rotate(360deg); } }
-/* Thin indeterminate bar for background work (admin lists). */
-.progress { height: 2px; margin: -2px 0 0; overflow: hidden; background: var(--color-divider); border-radius: 2px; }
-.progress::after {
-  content: ''; display: block; width: 40%; height: 100%; background: var(--color-accent);
-  animation: progress 1s ease-in-out infinite;
-}
-@keyframes progress { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
 .actions { display: flex; gap: 12px; flex-wrap: wrap; }
 
 /* Header: stays on top, over a blurred view of the page; anchors land below it. */
@@ -318,8 +311,28 @@ main.section > h1 { font-size: 32px; margin-bottom: 24px; }
   .field-grid > label, .field-grid > fieldset.localized:not(:has(textarea)) { grid-column: auto; }
 }
 .admin-form > .button { align-self: flex-start; }
-.admin-feedback { min-height: 20px; margin-bottom: 12px; }
-.bare { border: 0; padding: 0; margin: 0; min-width: 0; display: block; }
+.load-error { align-items: center; }
+/* Admin toasts (CollectionPage): bottom right, over the page; errors stay until closed. */
+.toasts {
+  position: fixed; z-index: 20; right: 24px; bottom: 24px; width: min(380px, calc(100vw - 32px));
+  display: flex; flex-direction: column; gap: 8px;
+}
+.toast {
+  display: flex; align-items: center; gap: 12px; padding: 10px 10px 10px 14px; font-size: 14px;
+  background: var(--color-surface); border: 1px solid var(--color-divider); border-left: 3px solid var(--color-accent);
+  border-radius: 10px; box-shadow: 0 16px 40px -20px var(--shadow);
+}
+.toast p { flex: 1; margin: 0; overflow-wrap: anywhere; }
+.toast-error { border-left-color: var(--color-danger); }
+.toast-error p { color: var(--color-danger); }
+/* Confirmation (delete, discard changes): a small centered box, on phones too (not full screen like the forms). */
+.modal.confirm {
+  width: min(440px, calc(100vw - 32px)); height: auto; margin: auto;
+  border: 1px solid var(--color-divider); border-radius: 14px;
+}
+.confirm h2 { margin: 0; font-size: 20px; }
+.confirm p { margin: 0; font-size: 14px; color: var(--color-neutral-300); }
+.confirm .actions { justify-content: flex-end; margin-top: 8px; }
 .admin-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
 .admin-list li {
   display: flex; align-items: center; gap: 8px; background: var(--color-surface); border: 1px solid transparent;
@@ -330,11 +343,12 @@ main.section > h1 { font-size: 32px; margin-bottom: 24px; }
 .admin-list:has(.dragging) li:not(.dragging) { transition: none; }
 .drag-handle { color: var(--color-neutral-600); cursor: grab; padding: 4px 6px; font-size: 16px; line-height: 1; user-select: none; }
 .admin-list li:hover .drag-handle { color: var(--color-neutral-300); }
-.bare:disabled .drag-handle { cursor: default; }
+.admin-list li[draggable='false'] .drag-handle { cursor: default; }
 .admin-list-summary {
   flex: 1; min-width: 0; overflow-wrap: anywhere; align-self: stretch; padding: 0; border: 0; background: none;
   font: 14px var(--font); color: inherit; text-align: left; cursor: pointer;
 }
+.admin-list-summary::after { display: inline-block; vertical-align: -0.15em; margin-left: 8px; }
 /* Item actions: inline here; on phones a sheet popover opened by ⋯. Undo the UA popover box. */
 .item-actions {
   display: flex; gap: 8px; align-items: center;
@@ -415,12 +429,13 @@ main.section > h1 { font-size: 32px; margin-bottom: 24px; }
   .item-actions::backdrop { background: rgba(10, 11, 20, 0.4); }
   .admin-list li:has(.item-actions:popover-open) { border-color: var(--color-accent); }
   .modal { width: 100%; height: 100dvh; max-width: none; max-height: none; margin: 0; border: 0; border-radius: 0; }
+  .toasts { right: var(--gutter); bottom: 16px; }
 }
 
 /* Touch screens: 44px targets in the admin, 16px inputs (iOS zooms into smaller ones), no drag (the ↑/↓ actions remain). */
 @media (pointer: coarse) {
   input, textarea, select { font-size: 16px; }
-  .admin .button, .admin .lang-toggle { min-height: 44px; min-width: 44px; }
+  .admin .button, .admin .lang-toggle, .toast .button { min-height: 44px; min-width: 44px; }
   .drag-handle { display: none; }
 }
 
@@ -489,8 +504,9 @@ main.section > h1 { font-size: 32px; margin-bottom: 24px; }
     }
     .project-card:hover::before { opacity: 1; }
   }
-  /* Feedback as it appears: a copied link's check, contact form result (an error shakes). */
+  /* Feedback as it appears: a copied link's check, admin toasts, contact form result (an error shakes). */
   .copied svg { animation: fade 0.25s ease-out; }
+  .toast { animation: rise 0.25s ease-out; }
   .contact .form-message:not(:empty) { animation: rise 0.3s ease-out; }
   .contact .form-error:not(:empty) { animation: shake 0.4s ease-in-out; }
   /* Theme switch (theme.tsx): the new theme grows as a circle from the toggle, over the old one. */
@@ -500,7 +516,7 @@ main.section > h1 { font-size: 32px; margin-bottom: 24px; }
   .theme-transition * { transition: none !important; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .button[aria-busy='true']::before, .loading::before { animation-duration: 1.6s; }
+  .button[aria-busy='true']::before, .loading::before, .admin-list li[aria-busy='true'] .admin-list-summary::after { animation-duration: 1.6s; }
   .project-card:has(.card-link:hover), .project-card:has(.card-link:hover) .project-image { transform: none; }
   /* View Transitions (theme, page change) switch instantly. */
   ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none; }

@@ -1,57 +1,147 @@
-import { beforeEach, expect, it, vi } from 'vitest';
+// @vitest-environment jsdom
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { api } from '../lib/api';
 import { CollectionPage } from './CollectionPage';
 import { COLLECTIONS } from './collections';
-import { FieldInput } from './fields';
 
-// No DOM in these tests: a minimal useState keeps state across renders like React does, so the page's handlers can be
-// replayed in the order a slow upload produces (handler captured at the upload's start, called after later edits).
-const hooks = vi.hoisted(() => ({ state: [] as unknown[], next: 0 }));
-vi.mock('react', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('react')>()),
-  useState: (initial: unknown) => {
-    const i = hooks.next++;
-    if (!(i in hooks.state)) hooks.state[i] = initial;
-    const set = (value: unknown) => (hooks.state[i] = typeof value === 'function' ? value(hooks.state[i]) : value);
-    return [hooks.state[i], set];
-  },
-  useEffect: () => {},
-  useRef: (current: unknown) => ({ current }),
-  useCallback: (fn: unknown) => fn,
-}));
+vi.mock('../lib/api', () => ({ api: vi.fn() }));
+const mockApi = vi.mocked(api);
 
-type Element = { type: unknown; props: Record<string, unknown> & { children?: unknown } };
-const elements = (node: unknown): Element[] => {
-  if (Array.isArray(node)) return node.flatMap(elements);
-  return node && typeof node === 'object' && 'props' in node ? [node as Element, ...elements((node as Element).props.children)] : [];
+// What jsdom lacks: modal dialogs, popovers, and the image decoding and previews of an upload.
+HTMLDialogElement.prototype.showModal = function () {
+  this.open = true;
 };
-
-const projects = COLLECTIONS.find((c) => c.path === 'projects')!;
-const render = () => {
-  hooks.next = 0;
-  return elements(CollectionPage({ collection: projects }));
+HTMLDialogElement.prototype.close = function () {
+  this.open = false;
+  this.dispatchEvent(new Event('close'));
 };
-type FieldProps = Parameters<typeof FieldInput>[0];
-/** The props a fresh render passes to a field: its current values and handlers. */
-const field = (key: string) => render().find((el) => el.type === FieldInput && (el.props as FieldProps).field.key === key)!.props as FieldProps;
+HTMLElement.prototype.hidePopover = () => {};
+URL.createObjectURL = () => 'blob:preview';
+URL.revokeObjectURL = () => {};
+vi.stubGlobal('createImageBitmap', async () => ({ width: 100, height: 100, close: () => {} }));
+
+const collection = (path: string) => COLLECTIONS.find((c) => c.path === path)!;
+const project = { id: 'p1', title: { pt: 'Site', en: 'Site' }, description: { pt: 'Um site', en: 'A site' }, tags: [], visible: true };
+/** Lets pending API calls settle and React re-render. */
+const settle = () => act(() => vi.advanceTimersByTimeAsync(0));
+const deferred = () => {
+  let resolve!: (value: unknown) => void, reject!: (error: Error) => void;
+  const promise = new Promise((res, rej) => ((resolve = res), (reject = rej)));
+  return { promise, resolve, reject };
+};
+const openDialog = () => screen.getAllByRole('dialog').find((dialog) => (dialog as HTMLDialogElement).open)!;
+const confirmDialog = () => screen.getByRole('alertdialog') as HTMLDialogElement;
+/** A row's action button: in a popover (the phones' ⋯ sheet), which jsdom counts as hidden. */
+const action = (name: string, row = screen.getByRole('listitem')) => within(row).getByRole('button', { name, hidden: true });
+const typeIn = (label: string, value: string) => fireEvent.change(within(openDialog()).getAllByLabelText(label)[0], { target: { value } });
 
 beforeEach(() => {
-  hooks.state = [];
-  (render().find((el) => el.props.children === 'Novo item')!.props.onClick as () => void)();
+  vi.useFakeTimers();
+  mockApi.mockReset();
+  mockApi.mockImplementation(async (path, options) => (!options?.method ? [project] : undefined));
+});
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
 });
 
-it('keeps what was typed while an image uploads', () => {
-  const finishUpload = field('imageMediaId').onChange; // the handler the upload started with
-  field('title').onChange({ title: { pt: 'Meu projeto', en: '' } });
-  finishUpload({ imageMediaId: 'media-1', imageUrl: '/uploads/media-1.webp' });
+const openNewProject = async () => {
+  render(<CollectionPage collection={collection('projects')} />);
+  await settle();
+  fireEvent.click(screen.getByRole('button', { name: 'Novo projeto' }));
+};
 
-  expect(field('title').values).toMatchObject({ title: { pt: 'Meu projeto' }, imageMediaId: 'media-1' });
+it('keeps what was typed while an image uploads, and locks save and cancel until it lands', async () => {
+  const upload = deferred();
+  mockApi.mockImplementation(async (path, options) => (path === '/admin/uploads' ? upload.promise : !options?.method ? [project] : undefined));
+  await openNewProject();
+  const buttons = () => ['Salvar', 'Cancelar'].map((name) => (within(openDialog()).getByRole('button', { name }) as HTMLButtonElement).disabled);
+
+  fireEvent.change(openDialog().querySelector('input[type=file]')!, { target: { files: [new File(['x'], 'a.png', { type: 'image/png' })] } });
+  await settle();
+  typeIn('PT', 'Meu projeto');
+  expect(buttons()).toEqual([true, true]);
+
+  upload.resolve({ id: 'media-1', url: '/uploads/media-1.webp' });
+  await settle();
+  expect(within(openDialog()).getAllByLabelText('PT')[0]).toHaveProperty('value', 'Meu projeto');
+  expect(openDialog().querySelector('img')).toHaveProperty('src', expect.stringContaining('/uploads/media-1.webp'));
+  expect(buttons()).toEqual([false, false]);
 });
 
-it('locks save and cancel while an image uploads', () => {
-  const buttons = () => render().filter((el) => el.type === 'button' && ['Salvar', 'Cancelar'].includes(el.props.children as string));
-  field('imageMediaId').onUploading!(true);
-  expect(buttons().map((el) => el.props.disabled)).toEqual([true, true]);
+it('shows a hidden item at once, and puts it back with an error toast when saving fails', async () => {
+  const saving = deferred();
+  mockApi.mockImplementation(async (path, options) => (options?.method === 'PATCH' ? saving.promise : [project]));
+  render(<CollectionPage collection={collection('projects')} />);
+  await settle();
 
-  field('imageMediaId').onUploading!(false);
-  expect(buttons().map((el) => el.props.disabled)).toEqual([false, false]);
+  fireEvent.click(action('Ocultar'));
+  expect(action('Mostrar')).toBeDefined();
+  expect(screen.getByRole('listitem').getAttribute('aria-busy')).toBe('true');
+  expect(mockApi).toHaveBeenCalledTimes(1 + 1); // the first load and the PATCH: no list reload
+
+  saving.reject(new Error('Sem conexão.'));
+  await settle();
+  expect(action('Ocultar')).toBeDefined();
+  expect(screen.getByRole('alert').textContent).toContain('Sem conexão.');
+});
+
+it('closes an untouched form at once, and asks before discarding changes', async () => {
+  await openNewProject();
+  fireEvent.click(within(openDialog()).getByRole('button', { name: 'Cancelar' }));
+  expect(screen.queryAllByRole('dialog').some((d) => (d as HTMLDialogElement).open)).toBe(false);
+
+  fireEvent.click(screen.getByRole('button', { name: 'Novo projeto' }));
+  typeIn('PT', 'Meu projeto');
+  fireEvent.keyDown(openDialog(), { key: 'Escape' });
+  expect(confirmDialog().open).toBe(true);
+  fireEvent.click(within(confirmDialog()).getByRole('button', { name: 'Continuar editando' }));
+  expect(within(openDialog()).getAllByLabelText('PT')[0]).toHaveProperty('value', 'Meu projeto');
+
+  fireEvent.click(within(openDialog()).getByRole('button', { name: 'Fechar' }));
+  fireEvent.click(within(confirmDialog()).getByRole('button', { name: 'Descartar' }));
+  expect(screen.queryAllByRole('dialog').some((d) => (d as HTMLDialogElement).open)).toBe(false);
+});
+
+it('saves the open form with Ctrl+S instead of saving the page', async () => {
+  await openNewProject();
+  typeIn('PT', 'Meu projeto');
+  fireEvent.change(within(openDialog()).getAllByLabelText('PT')[1], { target: { value: 'Descrição' } });
+
+  const shortcut = fireEvent.keyDown(within(openDialog()).getAllByLabelText('PT')[1], { key: 's', ctrlKey: true });
+  await settle();
+  expect(shortcut).toBe(false); // default prevented
+  expect(mockApi).toHaveBeenCalledWith('/admin/projects', expect.objectContaining({ method: 'POST' }));
+});
+
+it('names what a delete takes along; success toasts go away by themselves, error ones stay until closed', async () => {
+  const categories = [
+    { id: 'c1', name: { pt: 'Back-end' }, visible: true },
+    { id: 'c2', name: { pt: 'Front-end' }, visible: true },
+  ];
+  mockApi.mockImplementation(async (path, options) => {
+    if (options?.method === 'PATCH') throw new Error('Sem conexão.');
+    return options?.method ? undefined : categories;
+  });
+  render(<CollectionPage collection={collection('skill-categories')} />);
+  await settle();
+  const [backEnd, frontEnd] = screen.getAllByRole('listitem');
+
+  fireEvent.click(action('Excluir', backEnd));
+  expect(confirmDialog().textContent).toContain('“Back-end”');
+  expect(confirmDialog().textContent).toContain('As habilidades desta categoria também serão excluídas.');
+  fireEvent.click(within(confirmDialog()).getByRole('button', { name: 'Excluir' }));
+  await settle();
+  expect(screen.getByText('Item excluído.')).toBeDefined();
+  expect(screen.getAllByRole('listitem')).toEqual([frontEnd]);
+
+  fireEvent.click(action('Ocultar', frontEnd));
+  await settle();
+  await act(() => vi.advanceTimersByTimeAsync(10_000));
+  expect(screen.queryByText('Item excluído.')).toBeNull();
+  expect(screen.getByRole('alert').textContent).toContain('Sem conexão.');
+
+  fireEvent.click(screen.getByRole('button', { name: 'Fechar aviso' }));
+  expect(screen.queryByRole('alert')).toBeNull();
 });
