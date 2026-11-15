@@ -118,7 +118,7 @@ A API (ver `backend.md`) e o futuro front em React só rodam localmente em Docke
 ### WAF (4 regras, todas incluídas no plano)
 1. **Reputação de IP** (regra gerenciada da AWS): botnets e scanners conhecidos.
 2. **Rate limit geral**: 1000 requisições por IP a cada 5 min (uma visita consome ~10–20).
-3. **Common Rule Set** (OWASP), com a regra de tamanho de corpo (8 KB) só contando — uploads têm até 4 MB.
+3. **Common Rule Set** (OWASP), com duas regras de corpo só contando, porque bloqueiam o upload de imagem (bytes crus, até 4 MB): a de tamanho (8 KB) e a de XSS no corpo, que confunde dados binários com scripts. O tier Free não restringe regras a um caminho (*byte match*), então valem para qualquer corpo; o React escapa todo texto exibido e nada renderiza HTML cru.
 4. **Known Bad Inputs** (Log4j e afins).
 - **Sem rate limit por caminho na borda**: o tier Free recusa statements que inspecionam a requisição (*byte match*), necessários para restringir a regra a `/api/auth/*` (verificado no console ao assinar o plano: "configuration not available in this tier: byte match"). O brute force de login/refresh fica limitado por IP na própria API (contadores no Postgres). Com o plano Pro, a regra específica volta a ser possível.
 - Limitação conhecida: um ataque distribuído (muitos IPs, cada um abaixo do limite) passa pelo rate limit; aí entram a franquia sem excedente e o disjuntor (alarme de compute em minutos).
