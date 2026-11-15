@@ -18,6 +18,48 @@ export type Field = { key: string; label: string; required?: boolean; maxLength?
 const URL_RULES = { pattern: 'https?://.+', maxLength: 500, title: 'Endereço completo, começando com http:// ou https://' };
 // ponytail: empty entries (",,") count toward the 20; toPayload drops them, so at worst a stray comma must go.
 const TAGS_PATTERN = String.raw`\s*[^,]{0,40}\s*(,\s*[^,]{0,40}\s*){0,19}`;
+// The API's uploads: these types (MEDIA_MIMES, sniffed from the bytes) up to MAX_UPLOAD_BYTES (4 MiB). See apps/api/src/media.
+// ponytail: GIF and SVG are refused, not converted; accept them here once the API stores them.
+const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
+
+/** Why the API would refuse this image, in Portuguese; undefined when it takes it. Check the size of what is sent: after shrinkImage. */
+export function imageError(image: { type: string; size: number }): string | undefined {
+  if (!IMAGE_TYPES.includes(image.type)) return 'Formato não aceito: use JPEG, PNG ou WebP.';
+  if (image.size > MAX_IMAGE_BYTES) return 'Imagem grande demais: o limite é 4 MB, mesmo depois de reduzida.';
+}
+
+type Size = { width: number; height: number };
+
+/**
+ * Size to re-encode an image to: longest side at most 1600px, never upscaled. Also re-encoded (as WebP, so smaller) when
+ * over the API's limit at its own size. null when it can go as it is.
+ */
+export function resizeTo({ width, height }: Size, bytes: number): Size | null {
+  const scale = Math.min(1, 1600 / Math.max(width, height));
+  if (scale === 1 && bytes <= MAX_IMAGE_BYTES) return null;
+  return { width: Math.round(width * scale), height: Math.round(height * scale) };
+}
+
+/** What to upload: the file itself, or a WebP re-encode when resizeTo asks for one (EXIF rotation applied, metadata dropped). */
+async function shrinkImage(file: File): Promise<Blob> {
+  const bitmap = await createImageBitmap(file).catch(() => {
+    throw new Error('Não foi possível ler esta imagem.');
+  });
+  try {
+    const size = resizeTo(bitmap, file.size);
+    if (!size) return file;
+    const canvas = new OffscreenCanvas(size.width, size.height);
+    const context = canvas.getContext('2d')!;
+    context.imageSmoothingQuality = 'high';
+    context.drawImage(bitmap, 0, 0, size.width, size.height);
+    const webp = await canvas.convertToBlob({ type: 'image/webp' });
+    // ponytail: Safari can't encode WebP (hands back a PNG, often over the limit): JPEG there, losing any transparency.
+    return webp.type === 'image/webp' ? webp : canvas.convertToBlob({ type: 'image/jpeg' });
+  } finally {
+    bitmap.close();
+  }
+}
 
 /** Form state from an API record (or the empty defaults of a new one). */
 export function toFormValues(fields: Field[], record: Values = {}): Values {
@@ -85,6 +127,16 @@ export function toPayload(fields: Field[], values: Values): Values {
   return payload;
 }
 
+/** Whether a record has Portuguese text without its English version (the site then shows the Portuguese). */
+export function missingEnglish(fields: Field[], record: Values): boolean {
+  const lacksEn = (text?: LocalizedText) => Boolean(text?.pt.trim() && !text.en?.trim());
+  return fields.some((field) => {
+    const value = record[field.key];
+    if (field.type === 'localizedList') return ((value as LocalizedText[] | undefined) ?? []).some(lacksEn);
+    return (field.type === 'localized' || field.type === 'localizedText') && lacksEn(value as LocalizedText | undefined);
+  });
+}
+
 /** `onUploading` reports an image upload in flight, so the form can hold save/cancel until it lands. */
 export function FieldInput(props: { field: Field; values: Values; onChange: (changes: Values) => void; onUploading?: (uploading: boolean) => void }) {
   const { field, values, onChange, onUploading } = props;
@@ -150,13 +202,13 @@ function LocalizedInput(props: { label: string; multiline: boolean; required?: b
       <legend>{label}</legend>
       <label>
         PT
-        <Input value={value.pt} required={required} maxLength={5000} rows={multiline ? 3 : undefined} onChange={(event) => onChange({ ...value, pt: event.target.value })} />
+        <Input lang="pt-BR" value={value.pt} required={required} maxLength={5000} rows={multiline ? 3 : undefined} onChange={(event) => onChange({ ...value, pt: event.target.value })} />
       </label>
       <label>
         <span>
           EN <small>(opcional; vazio usa o PT)</small>
         </span>
-        <Input value={value.en ?? ''} maxLength={5000} rows={multiline ? 3 : undefined} onChange={(event) => onChange({ ...value, en: event.target.value })} />
+        <Input lang="en" value={value.en ?? ''} maxLength={5000} rows={multiline ? 3 : undefined} onChange={(event) => onChange({ ...value, en: event.target.value })} />
       </label>
     </fieldset>
   );
@@ -209,12 +261,27 @@ function MediaInput(props: {
   onUploading?: (uploading: boolean) => void;
 }) {
   const { label, url, onChange, onUploading } = props;
-  const [state, setState] = useState<{ uploading: boolean; error?: string }>({ uploading: false });
+  // `preview`: the picked file, shown at once (object URL) until the upload settles; freed when replaced or on unmount.
+  const [state, setState] = useState<{ uploading: boolean; error?: string; preview?: string }>({ uploading: false });
+  const [dropTarget, setDropTarget] = useState(false);
+  const { preview } = state;
+  useEffect(() => () => {
+    if (preview) URL.revokeObjectURL(preview);
+  }, [preview]);
+
   const upload = async (file: File) => {
-    setState({ uploading: true });
+    // The type first: only what the API stores is decoded and previewed. The size after shrinking, which brings most photos under it.
+    if (!IMAGE_TYPES.includes(file.type)) {
+      setState({ uploading: false, error: imageError(file) });
+      return;
+    }
+    setState({ uploading: true, preview: URL.createObjectURL(file) });
     onUploading?.(true);
     try {
-      const media = await api<{ id: string; url: string }>('/admin/uploads', { method: 'POST', file, auth: true });
+      const image = await shrinkImage(file);
+      const error = imageError(image);
+      if (error) throw new Error(error);
+      const media = await api<{ id: string; url: string }>('/admin/uploads', { method: 'POST', file: image, auth: true });
       onChange(media.id, media.url);
       setState({ uploading: false });
     } catch (error) {
@@ -224,19 +291,37 @@ function MediaInput(props: {
     }
   };
   return (
-    <fieldset className="media">
+    <fieldset
+      className={dropTarget ? 'media drop-target' : 'media'}
+      // Drag and drop: an image file dropped anywhere on the field.
+      onDragOver={(event) => {
+        if (!event.dataTransfer.types.includes('Files')) return;
+        event.preventDefault();
+        setDropTarget(true);
+      }}
+      onDragLeave={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropTarget(false);
+      }}
+      onDrop={(event) => {
+        event.preventDefault();
+        setDropTarget(false);
+        const file = event.dataTransfer.files[0];
+        if (file && !state.uploading) void upload(file);
+      }}
+    >
       <legend>{label}</legend>
-      {url && <img src={url} alt="" className="media-preview" />}
+      {(preview ?? url) && <img src={preview ?? url!} alt="" className="media-preview" />}
       <input
         type="file"
-        accept="image/jpeg,image/png,image/webp"
+        accept={IMAGE_TYPES.join()}
         disabled={state.uploading}
         onChange={(event) => {
           const file = event.target.files?.[0];
+          event.target.value = ''; // picking the same file again (after a refusal) still fires a change
           if (file) void upload(file);
         }}
       />
-      <small>JPEG, PNG ou WebP, até 4 MB.</small>
+      <small>JPEG, PNG ou WebP, até 4 MB; com mais de 1600 px, a imagem é reduzida. Também dá para arrastá-la até aqui.</small>
       {url && (
         <button type="button" className="button button-small" onClick={() => onChange(null, null)}>
           Remover imagem

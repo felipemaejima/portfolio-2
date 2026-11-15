@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { api } from '../lib/api';
 import type { Collection } from './collections';
-import { FieldInput, toFormValues, toPayload } from './fields';
+import { FieldInput, missingEnglish, toFormValues, toPayload } from './fields';
 
 type Item = Record<string, unknown> & { id: string; visible: boolean };
 
@@ -198,6 +198,11 @@ export function CollectionPage({ collection }: { collection: Collection }) {
                 <button type="button" className="admin-list-summary" onClick={() => edit(item)}>
                   {collection.summary(item)}
                   {!item.visible && <small> (oculto)</small>}
+                  {missingEnglish(collection.fields, item) && (
+                    <small className="tag tag-accent" title="Há textos sem a versão em inglês">
+                      sem EN
+                    </small>
+                  )}
                 </button>
                 {/* Inline on wide screens; on narrow ones the ⋯ button opens them as a sheet (styles.css). Closes after any action. */}
                 <button type="button" className="button button-small item-menu-toggle" popoverTarget={`actions-${item.id}`} aria-label={`Ações: ${collection.summary(item)}`}>
