@@ -16,8 +16,13 @@ CLOUD       := $(CLOUD_RAW) $(TTY)
 # Captured output ($$(...) or pipes) must not come from a TTY: it would carry \r into values.
 AWS_RAW     := $(CLOUD_RAW) amazon/aws-cli:2.37.4
 AWS         := $(CLOUD) amazon/aws-cli:2.37.4
-TF_RAW      := $(CLOUD_RAW) hashicorp/terraform:1.16.4 -chdir=infra/main
-TF          := $(CLOUD) hashicorp/terraform:1.16.4 -chdir=infra/main
+# VIA=cli (make tf-plan VIA=cli): when the SSO portal fails for Terraform (GetRoleCredentials 503) while the AWS CLI still
+# works from its cached role credentials, Terraform gets those as env vars instead (never printed), without AWS_PROFILE
+# (it would send Terraform back to the portal). Works while that cache lasts (~1 h after the CLI fetched them).
+TF_CLOUD    := $(if $(filter cli,$(VIA)),creds=$$($(AWS_RAW) configure export-credentials --format env) && eval "$$creds" && \
+               $(CLOUD_BASE) -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_SESSION_TOKEN,$(CLOUD_RAW))
+TF_RAW      := $(TF_CLOUD) hashicorp/terraform:1.16.4 -chdir=infra/main
+TF          := $(TF_CLOUD) $(TTY) hashicorp/terraform:1.16.4 -chdir=infra/main
 TF_BOOT     := $(CLOUD) hashicorp/terraform:1.16.4 -chdir=infra/bootstrap
 
 .DEFAULT_GOAL := help
@@ -98,10 +103,10 @@ tf-bootstrap: $(HOME)/.aws ## one-time: create the Terraform state bucket (local
 tf-init: $(HOME)/.aws ## init infra/main against the state bucket
 	$(TF) init -input=false -backend-config=bucket=$$($(CLOUD_RAW) hashicorp/terraform:1.16.4 -chdir=infra/bootstrap output -raw state_bucket)
 
-tf-plan: $(HOME)/.aws ## preview infra changes (args: ARGS=...)
+tf-plan: $(HOME)/.aws ## preview infra changes (args: ARGS=...; VIA=cli if the SSO portal fails)
 	$(TF) plan $(ARGS)
 
-tf-apply: $(HOME)/.aws ## apply infra changes (args: ARGS=..., e.g. ARGS='-target=aws_route53_zone.main')
+tf-apply: $(HOME)/.aws ## apply infra changes (args: ARGS=..., e.g. ARGS='-target=aws_route53_zone.main'; VIA=cli as tf-plan)
 	$(TF) apply $(ARGS)
 
 aws: $(HOME)/.aws ## any AWS CLI command, files land in the repo root (ARGS='s3 ls')
