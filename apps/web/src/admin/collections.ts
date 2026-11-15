@@ -11,6 +11,11 @@ const PRECISION = { type: 'select', options: [{ value: 'MONTH', label: 'Mês e a
 export type Collection = {
   path: string;
   title: string;
+  /** One item, in titles: "Editar projeto". With its own "Novo"/"Nova", by the noun's gender. */
+  item: string;
+  newItem: string;
+  /** What else goes when an item is deleted (the database cascades), said in the delete dialog. */
+  deleteWarning?: string;
   fields: Field[];
   summary: (item: Item) => string;
   /** Only paginated admin lists accept paging params; the API rejects unknown query parameters. */
@@ -22,6 +27,8 @@ export const COLLECTIONS: Collection[] = [
   {
     path: 'social-links',
     title: 'Links sociais',
+    item: 'link',
+    newItem: 'Novo link',
     fields: [
       { key: 'label', label: 'Nome (ex.: GitHub)', type: 'text', required: true, maxLength: 60 },
       { key: 'url', label: 'URL', type: 'url', required: true },
@@ -31,12 +38,17 @@ export const COLLECTIONS: Collection[] = [
   {
     path: 'skill-categories',
     title: 'Categorias de habilidades',
+    item: 'categoria',
+    newItem: 'Nova categoria',
+    deleteWarning: 'As habilidades desta categoria também serão excluídas.',
     fields: [{ key: 'name', label: 'Nome', type: 'localized', required: true }],
     summary: (item) => pt(item.name),
   },
   {
     path: 'skills',
     title: 'Habilidades',
+    item: 'habilidade',
+    newItem: 'Nova habilidade',
     fields: [
       { key: 'name', label: 'Tecnologia', type: 'text', required: true, maxLength: 60 },
       {
@@ -53,6 +65,8 @@ export const COLLECTIONS: Collection[] = [
   {
     path: 'projects',
     title: 'Projetos',
+    item: 'projeto',
+    newItem: 'Novo projeto',
     fields: [
       { key: 'title', label: 'Título', type: 'localized', required: true },
       { key: 'description', label: 'Descrição', type: 'localizedText', required: true },
@@ -69,6 +83,8 @@ export const COLLECTIONS: Collection[] = [
   {
     path: 'experiences',
     title: 'Experiência',
+    item: 'experiência',
+    newItem: 'Nova experiência',
     fields: [
       { key: 'role', label: 'Cargo', type: 'localized', required: true },
       { key: 'company', label: 'Empresa', type: 'text', required: true, maxLength: 120 },
@@ -82,6 +98,8 @@ export const COLLECTIONS: Collection[] = [
   {
     path: 'education',
     title: 'Formação',
+    item: 'formação',
+    newItem: 'Nova formação',
     fields: [
       { key: 'title', label: 'Título', type: 'localized', required: true },
       { key: 'institution', label: 'Instituição', type: 'text', required: true, maxLength: 120 },
@@ -105,6 +123,8 @@ export const COLLECTIONS: Collection[] = [
   {
     path: 'services',
     title: 'Serviços',
+    item: 'serviço',
+    newItem: 'Novo serviço',
     fields: [
       { key: 'title', label: 'Título', type: 'localized', required: true },
       { key: 'description', label: 'Descrição', type: 'localizedText', required: true },

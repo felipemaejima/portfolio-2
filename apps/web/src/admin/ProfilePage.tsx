@@ -1,7 +1,7 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { ApiError, api } from '../lib/api';
 import { PROFILE_FIELDS } from './collections';
-import { FieldInput, toFormValues, toPayload } from './fields';
+import { FieldInput, toFormValues, toPayload, useSaveShortcut } from './fields';
 
 export function ProfilePage() {
   const [values, setValues] = useState<Record<string, unknown>>();
@@ -9,8 +9,10 @@ export function ProfilePage() {
   const [notice, setNotice] = useState<string>();
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const submitRef = useRef<HTMLButtonElement>(null);
+  useSaveShortcut(submitRef);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     api<Record<string, unknown>>('/admin/profile', { auth: true }).then(
       (profile) => setValues(toFormValues(PROFILE_FIELDS, profile)),
       // No profile yet: start from an empty form (the first save creates it).
@@ -18,6 +20,7 @@ export function ProfilePage() {
         error instanceof ApiError && error.status === 404 ? setValues(toFormValues(PROFILE_FIELDS)) : setError((error as Error).message),
     );
   }, []);
+  useEffect(load, [load]);
 
   const save = async (event: FormEvent) => {
     event.preventDefault();
@@ -35,7 +38,24 @@ export function ProfilePage() {
     }
   };
 
-  if (!values) return <p className={error ? 'form-error' : 'muted loading'}>{error ?? 'Carregando…'}</p>;
+  if (!values)
+    return error ? (
+      <div className="actions load-error">
+        <p className="form-error">{error}</p>
+        <button
+          type="button"
+          className="button"
+          onClick={() => {
+            setError(undefined);
+            load();
+          }}
+        >
+          Tentar de novo
+        </button>
+      </div>
+    ) : (
+      <p className="muted loading">Carregando…</p>
+    );
   return (
     <form className="form admin-form field-grid" onSubmit={(event) => void save(event)}>
       <h1>Perfil</h1>
@@ -49,7 +69,7 @@ export function ProfilePage() {
         />
       ))}
       <div className="form-footer">
-        <button type="submit" className="button button-accent" disabled={saving || uploading} aria-busy={saving}>
+        <button ref={submitRef} type="submit" className="button button-accent" disabled={saving || uploading} aria-busy={saving}>
           {saving ? 'Salvando…' : 'Salvar'}
         </button>
         {error && (
