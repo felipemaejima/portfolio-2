@@ -451,8 +451,33 @@ main.section > h1 { font-size: 32px; margin-bottom: 24px; }
   /* Newly loaded project cards (filters, pages). */
   .fade-items > * { animation: rise 0.45s ease-out both; }
   html:has(.site-header) { scroll-behavior: smooth; }
-  .modal[open], .site-nav:popover-open { animation: rise 0.25s ease-out; }
-  .modal[open]::backdrop { animation: fade 0.25s ease-out; }
+  /* Dialogs and the phone menus ease in from a closed pose and back out to it. Where `overlay` transitions they stay
+     shown, in the top layer, until the exit ends; elsewhere (no overlay) they'd jump out of the top layer mid-fade, so
+     they just close. */
+  :root { --exit-props: opacity, transform; }
+  @supports (overlay: auto) { :root { --exit-props: opacity, transform, display, overlay; } }
+  .modal { transition: 0.2s ease-out allow-discrete; transition-property: var(--exit-props); }
+  .modal:not([open]) { opacity: 0; transform: translateY(12px); }
+  .modal::backdrop { transition: opacity 0.2s ease-out; }
+  .modal:not([open])::backdrop { opacity: 0; }
+  @starting-style {
+    .modal[open] { opacity: 0; transform: translateY(12px); }
+    .modal[open]::backdrop { opacity: 0; }
+  }
+  @media (max-width: 860px) {
+    .site-nav, .admin-menu, .item-actions { transition: 0.2s ease-out allow-discrete; transition-property: var(--exit-props); }
+    .site-nav:not(:popover-open) { opacity: 0; transform: translateY(12px); }
+    .admin-menu:not(:popover-open) { transform: translateX(100%); }
+    .item-actions:not(:popover-open) { transform: translateY(100%); }
+    .admin-menu::backdrop, .item-actions::backdrop { transition: opacity 0.2s ease-out; }
+    .admin-menu:not(:popover-open)::backdrop, .item-actions:not(:popover-open)::backdrop { opacity: 0; }
+    @starting-style {
+      .site-nav:popover-open { opacity: 0; transform: translateY(12px); }
+      .admin-menu:popover-open { transform: translateX(100%); }
+      .item-actions:popover-open { transform: translateY(100%); }
+      .admin-menu:popover-open::backdrop, .item-actions:popover-open::backdrop { opacity: 0; }
+    }
+  }
   /* Project cards: a soft accent glow follows the cursor (ProjectCard sets --glow-x/y); mouse and pen only. */
   @media (hover: hover) and (pointer: fine) {
     .project-card { isolation: isolate; }
