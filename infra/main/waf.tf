@@ -6,8 +6,10 @@ locals {
   managed_rule_groups = {
     # Known malicious IPs (botnets, scanners). Cheapest check first.
     ip-reputation = { priority = 0, name = "AWSManagedRulesAmazonIpReputationList", count_only = [] }
-    # OWASP-style protections. Its 8 KB body limit would block image uploads (up to 4 MB): counted, not blocked.
-    common = { priority = 3, name = "AWSManagedRulesCommonRuleSet", count_only = ["SizeRestrictions_BODY"] }
+    # OWASP-style protections. Counted, not blocked, because image uploads (raw bytes, up to 4 MB) trip them: the 8 KB
+    # body limit, and the body XSS patterns matching binary data (#32). Free can't scope them away from the upload path
+    # (no byte match), so they're off for every body; React escapes all rendered text and nothing renders raw HTML.
+    common = { priority = 3, name = "AWSManagedRulesCommonRuleSet", count_only = ["SizeRestrictions_BODY", "CrossSiteScripting_BODY"] }
     # Exploit patterns such as Log4j, invalid/malicious request shapes.
     known-bad-inputs = { priority = 4, name = "AWSManagedRulesKnownBadInputsRuleSet", count_only = [] }
   }
