@@ -154,8 +154,13 @@ A API (ver `backend.md`) e o futuro front em React só rodam localmente em Docke
 - **SSM Parameter Store (SecureString, gratuito)** é a fonte única:
   - JWT access/refresh: gerados pelo Terraform (`random_password`) e gravados no SSM.
   - URLs do Neon (pooled e direta): gravadas no SSM por `make db-secrets` (valor digitado, nunca em arquivo).
-- A Lambda **lê os segredos do SSM no boot** (uma chamada `GetParameters`, antes de a configuração ser validada), com a própria role, que só pode ler esses 3 parâmetros. As variáveis de ambiente da função guardam apenas o prefixo (`SECRETS_SSM_PREFIX`). Por quê: qualquer um que leia a configuração da função — inclusive a role de deploy do CI, e até a resposta do `UpdateFunctionCode` — veria variáveis de ambiente em texto puro. Custo: ~50–100 ms a mais só no cold start; SSM padrão é gratuito. O Terraform deixa de ler a URL do banco (fica fora do estado e dos planos). Secrets Manager não compensa aqui (US$ 0,40/segredo/mês sem ganho sobre o SSM).
+  - Webhooks do Discord, um por canal, gravados por `make discord-secrets` (mesmo padrão: digitados, sem eco, nunca em arquivo, fora do estado do Terraform):
+    - `#alertas` → `discord-alerts-webhook`: Alertas e Logins;
+    - `#contato` → `discord-contact-webhook`: Mensagens de contato;
+    - `#visitas` → `discord-visits-webhook`: Visitas (canal silenciado no Discord).
+- A Lambda **lê os segredos do SSM no boot** (uma chamada `GetParameters`, antes de a configuração ser validada), com a própria role, que só pode ler os parâmetros listados um por um no Terraform (`database-url`, os dois JWT e os 3 webhooks do Discord). Cada canal do Discord entra na leitura do boot no ticket que o usa; a partir daí, a API não sobe se faltar o parâmetro. As variáveis de ambiente da função guardam apenas o prefixo (`SECRETS_SSM_PREFIX`). Por quê: qualquer um que leia a configuração da função — inclusive a role de deploy do CI, e até a resposta do `UpdateFunctionCode` — veria variáveis de ambiente em texto puro. Custo: ~50–100 ms a mais só no cold start; SSM padrão é gratuito. O Terraform deixa de ler a URL do banco (fica fora do estado e dos planos). Secrets Manager não compensa aqui (US$ 0,40/segredo/mês sem ganho sobre o SSM).
 - Trocar um segredo: atualizar o SSM (`make db-secrets`) e forçar instâncias novas (`make api-restart`), sem `terraform apply`.
+- Trocar um webhook do Discord (vazou, ou o canal mudou): criar o novo webhook no canal, rodar `make discord-secrets` colando só a URL nova (deixar uma URL em branco mantém o valor atual), forçar instâncias novas de quem lê o webhook (a API: `make api-restart`) e apagar o webhook antigo no Discord — quem tem a URL pode postar no canal.
 - O CI lê a URL direta do SSM via OIDC — **nenhum segredo de banco no GitHub**. O GitHub guarda só identificadores: como *variables* os que não revelam nada (domínio, nomes de recursos, nome do parâmetro SSM); como *secrets* os que contêm o ID da conta AWS (ARNs das roles, nomes dos buckets), porque os logs de um repositório público são públicos e secrets são mascarados. Os workflows também ativam `mask-aws-account-id`.
 
 ### CI/CD (GitHub Actions)
@@ -183,7 +188,7 @@ A API (ver `backend.md`) e o futuro front em React só rodam localmente em Docke
 - Estimativa mensal: CloudFront, WAF e Route 53 cobertos pelo plano (US$ 0); Lambda, S3, ECR, CloudWatch e SNS em centavos ou nas cotas gratuitas; **total ~US$ 0–1**. Custo residual sob ataque distribuído: invocações da Lambda que passarem pelo WAF e pelo cache — limitado pelo disjuntor.
 
 ### Makefile (targets de nuvem)
-- `aws-configure`, `aws-login`, `tf-bootstrap`, `tf-init`, `tf-plan`, `tf-apply`, `aws` e `tf` (comandos avulsos), `tf-fmt`, `ci-lint`, `db-secrets`, `seed-prod` (admin de produção no Neon), `api-publish` (primeira imagem / fallback), `plan-subscribe` (plano Free do CloudFront), `api-restart` (instâncias novas após trocar um segredo no SSM), `api-enable` (religa a API após o disjuntor), `smoke`. Todos via containers, como o usuário do host.
+- `aws-configure`, `aws-login`, `tf-bootstrap`, `tf-init`, `tf-plan`, `tf-apply`, `aws` e `tf` (comandos avulsos), `tf-fmt`, `ci-lint`, `db-secrets`, `discord-secrets` (webhooks do Discord), `seed-prod` (admin de produção no Neon), `api-publish` (primeira imagem / fallback), `plan-subscribe` (plano Free do CloudFront), `api-restart` (instâncias novas após trocar um segredo no SSM), `api-enable` (religa a API após o disjuntor), `smoke`. Todos via containers, como o usuário do host.
 
 ## Testing Decisions
 

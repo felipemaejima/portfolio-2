@@ -46,11 +46,15 @@ resource "aws_ssm_parameter" "jwt" {
   value    = each.value.result
 }
 
-# The Neon URLs are written by `make db-secrets` (never by Terraform, so they stay out of its state and plans).
-# The Lambda reads the pooled one plus the JWT secrets at boot (see api_secrets below); CI reads only the direct one.
+# The Neon URLs and the Discord webhooks are written by `make db-secrets` / `make discord-secrets` (never by Terraform,
+# so they stay out of its state and plans). The Lambda may read all of these (api_secrets below); at boot it reads the
+# pooled URL plus the JWT secrets (apps/api/src/ssm-secrets.ts). CI reads only the direct URL.
 locals {
   api_secret_arns = [
-    for name in ["database-url", "jwt-access-secret", "jwt-refresh-secret"] :
+    for name in [
+      "database-url", "jwt-access-secret", "jwt-refresh-secret",
+      "discord-alerts-webhook", "discord-contact-webhook", "discord-visits-webhook",
+    ] :
     "arn:aws:ssm:us-east-1:${local.account_id}:parameter${local.ssm_prefix}/${name}"
   ]
 }

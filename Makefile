@@ -28,10 +28,10 @@ TF_BOOT     := $(CLOUD) hashicorp/terraform:1.16.4 -chdir=infra/bootstrap
 .DEFAULT_GOAL := help
 
 .PHONY: help up down logs sh install migrate migration seed studio test lint openapi build test-web reset-db \
-        aws-configure aws-login tf-bootstrap tf-init tf-plan tf-apply aws tf tf-fmt ci-lint db-secrets seed-prod api-publish plan-subscribe api-restart api-enable smoke
+        aws-configure aws-login tf-bootstrap tf-init tf-plan tf-apply aws tf tf-fmt ci-lint db-secrets discord-secrets seed-prod api-publish plan-subscribe api-restart api-enable smoke
 
 help: ## list available commands
-	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "} {printf "  \033[36m%-13s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "} {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
 
 .env:
 	cp .env.example .env
@@ -131,6 +131,17 @@ db-secrets: $(HOME)/.aws ## store the Neon connection strings in SSM (typed, nev
 	  aws ssm put-parameter --name $(SSM_PREFIX)/database-url --type SecureString --overwrite --value "$$POOLED" >/dev/null && \
 	  aws ssm put-parameter --name $(SSM_PREFIX)/direct-database-url --type SecureString --overwrite --value "$$DIRECT" >/dev/null' && \
 	echo "Stored $(SSM_PREFIX)/database-url and $(SSM_PREFIX)/direct-database-url"
+
+discord-secrets: $(HOME)/.aws ## store the Discord webhook URLs in SSM (typed, never echoed; blank keeps the current one)
+	@read -rsp "#alertas webhook URL (blank keeps the current one): " ALERTS && echo && \
+	read -rsp "#contato webhook URL (blank keeps the current one): " CONTACT && echo && \
+	read -rsp "#visitas webhook URL (blank keeps the current one): " VISITS && echo && \
+	export ALERTS CONTACT VISITS && \
+	$(CLOUD) -e ALERTS -e CONTACT -e VISITS --entrypoint sh amazon/aws-cli:2.37.4 -c '\
+	  put() { [ -n "$$2" ] || { echo "Skipped $(SSM_PREFIX)/$$1 (blank)"; return 0; }; \
+	    aws ssm put-parameter --name $(SSM_PREFIX)/$$1 --type SecureString --overwrite --value "$$2" >/dev/null && \
+	    echo "Stored $(SSM_PREFIX)/$$1"; } && \
+	  put discord-alerts-webhook "$$ALERTS" && put discord-contact-webhook "$$CONTACT" && put discord-visits-webhook "$$VISITS"'
 
 api-publish: $(HOME)/.aws ## build the arm64 image and push it to ECR (first deploy / manual fallback; CI does this normally)
 	docker run --privileged --rm tonistiigi/binfmt:qemu-v10.2.3 --install arm64 >/dev/null
