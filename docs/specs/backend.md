@@ -208,6 +208,7 @@ Admin (`/admin/*`, JWT obrigatório):
 - `GET|PUT /admin/profile`.
 - Para cada coleção (`social-links`, `skill-categories`, `skills`, `projects`, `experiences`, `education`, `services`): `GET` (lista, com filtros), `GET /:id`, `POST`, `PATCH /:id`, `DELETE /:id`, `PATCH /reorder` (recebe `[ids]`, reescreve `position` em transação).
 - `POST /admin/uploads`, `GET /admin/media`, `DELETE /admin/media/:id`.
+- `GET /admin/test-error` — sempre **500**, logado com nível `error`: testa de ponta a ponta o Alerta de erros da API (log → filtro → alarme → `#alertas`). Fora da documentação Swagger.
 
 ### Contato (Discord)
 - **Webhook** do `#contato` em `DISCORD_CONTACT_WEBHOOK_URL`. Em produção é obrigatório e vem do SSM no boot (`discord-contact-webhook`, ver `infra.md`): nunca em variável de ambiente da Lambda, no state ou nos logs. Fora de produção é opcional; sem ele, a mensagem só vai para o log (ambiente local sem webhook real).
