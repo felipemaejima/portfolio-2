@@ -19,11 +19,17 @@ describe('loadSecretsFromSsm', () => {
       '/portfolio/prod/database-url': 'postgresql://db',
       '/portfolio/prod/jwt-access-secret': 'access',
       '/portfolio/prod/jwt-refresh-secret': 'refresh',
+      '/portfolio/prod/discord-contact-webhook': 'https://discord.test/contact',
     });
 
     await loadSecretsFromSsm(env, ssm as never);
 
-    expect(env).toMatchObject({ DATABASE_URL: 'postgresql://db', JWT_ACCESS_SECRET: 'access', JWT_REFRESH_SECRET: 'refresh' });
+    expect(env).toMatchObject({
+      DATABASE_URL: 'postgresql://db',
+      JWT_ACCESS_SECRET: 'access',
+      JWT_REFRESH_SECRET: 'refresh',
+      DISCORD_CONTACT_WEBHOOK_URL: 'https://discord.test/contact',
+    });
     expect(ssm.send.mock.calls[0][0].input.WithDecryption).toBe(true);
   });
 

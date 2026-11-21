@@ -1719,8 +1719,8 @@
           }
         },
         "responses": {
-          "201": {
-            "description": ""
+          "204": {
+            "description": "Delivered (or silently dropped: honeypot filled)"
           }
         },
         "tags": [

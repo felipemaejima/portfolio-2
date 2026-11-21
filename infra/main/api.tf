@@ -48,7 +48,8 @@ resource "aws_ssm_parameter" "jwt" {
 
 # The Neon URLs and the Discord webhooks are written by `make db-secrets` / `make discord-secrets` (never by Terraform,
 # so they stay out of its state and plans). The Lambda may read all of these (api_secrets below); at boot it reads the
-# pooled URL plus the JWT secrets (apps/api/src/ssm-secrets.ts). CI reads only the direct URL.
+# pooled URL, the JWT secrets and the webhooks its features use (apps/api/src/ssm-secrets.ts). CI reads only the
+# direct URL.
 locals {
   api_secret_arns = [
     for name in [
@@ -133,7 +134,7 @@ resource "aws_lambda_function" "api" {
     variables = {
       PUBLIC_URL       = "https://${var.domain}"
       CLIENT_IP_HEADER = "x-viewer-ip" # set by the CloudFront Function in web.tf; clients can't forge it
-      # Where the app reads DATABASE_URL and the JWT secrets at boot (apps/api/src/ssm-secrets.ts). No secret values here.
+      # Where the app reads its secrets at boot (apps/api/src/ssm-secrets.ts). No secret values here.
       SECRETS_SSM_PREFIX = local.ssm_prefix
       STORAGE_DRIVER     = "s3"
       S3_BUCKET          = aws_s3_bucket.this["uploads"].id
