@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { useLang } from '../lib/i18n';
+import { Logo } from '../lib/logo';
 import { visibleSections, type Section } from '../lib/sections';
 import { ThemeToggle } from '../lib/theme';
 import type { Portfolio } from '../lib/types';
@@ -15,11 +16,7 @@ export function SiteHeader({ portfolio }: { portfolio?: Portfolio }) {
     <header className="site-header">
       {/* On mobile only the mark shows; the label keeps the name for screen readers. */}
       <Link to="/" className="brand" aria-label={name}>
-        <svg className="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
-          {/* Same drawing as src/favicon.svg, coloured by the theme (styles.css). */}
-          <rect width="32" height="32" rx="7" />
-          <path d="M4.5 8H13v3.5H8v3h4V18H8v6H4.5zM15.5 24V8h3.6l2.4 6.4L23.9 8h3.6v16H24V14.6l-1.6 4.4h-1.8L19 14.6V24z" />
-        </svg>
+        <Logo className="brand-mark" />
         <span className="brand-name">{name}</span>
       </Link>
       {/* Inline on wide screens; on narrow ones the menu button opens it as a popover (styles.css). */}
