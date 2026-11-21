@@ -93,8 +93,7 @@ html:has(.site-header) { scroll-padding-top: var(--header-height); }
 }
 @keyframes grow { to { transform: scaleX(1); } }
 .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 18px; text-decoration: none; margin-right: auto; }
-.brand-mark { width: 28px; height: 28px; flex: none; fill: var(--color-accent); }
-.brand-mark path { fill: var(--color-bg); }
+.brand-mark { height: 26px; width: auto; flex: none; }
 /* The nav is also the narrow screens' menu popover: undo the UA popover box here. */
 .site-nav {
   display: flex; gap: 24px; flex-wrap: wrap;
