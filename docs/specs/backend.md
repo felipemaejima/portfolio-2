@@ -219,7 +219,7 @@ Admin (`/admin/*`, JWT obrigatório):
 
 ### Visita (Discord)
 - **Visita** (ver `GLOSSARY.md`): alguém que não é o admin abriu o site público. Cada Visita nova gera uma mensagem no `#visitas` com página, idioma, origem e navegador, e horário (`timestamp`).
-- **No navegador** (`apps/web/src/lib/visit.ts`): as páginas públicas chamam `POST /visits` ao montar, no máximo uma vez a cada 24 h por navegador (`localStorage`), sem a página esperar a resposta. Recarregar ou navegar não chama nada. O navegador onde houve Login fica marcado (`localStorage`, mesma origem que o admin) e nunca anuncia. Sem `localStorage` (bloqueado), não anuncia.
+- **No navegador** (`apps/web/src/lib/visit.ts`): as páginas públicas chamam `POST /visits` ao montar, no máximo uma vez a cada 24 h por navegador (`localStorage`), sem a página esperar a resposta. Só conta como anunciado quando a API responde (204, ou 429 porque o IP já anunciou): uma falha (rede, 5xx, o site publicado antes da API) é tentada de novo na próxima carga. Recarregar ou navegar não chama nada. O navegador onde houve Login fica marcado (`localStorage`, mesma origem que o admin) e nunca anuncia. Sem `localStorage` (bloqueado), não anuncia.
 - **Na API, dois limites**, ambos com contadores no Postgres (`RateLimit`):
   - **por IP**: um a cada 24 h pelo throttle por IP que já existe (chave sha256, o IP não fica em texto puro); repetição → 429. Ele roda antes do teto, então uma repetição não gasta o teto;
   - **teto do site inteiro**: 50 avisos a cada 24 h, só para `/visits` (login, refresh e contato não contam nem são afetados). Acima disso → 204 sem envio, sem mensagem de "teto atingido".
