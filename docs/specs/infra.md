@@ -176,10 +176,16 @@ A API (ver `backend.md`) e o futuro front em React só rodam localmente em Docke
   - O Terraform ignora a concorrência reservada da função: um `apply` nunca religa a API por engano depois do disjuntor.
 - **AWS Budgets**: US$ 11/mês, e-mail em 50/80/100% (real) e 100% (previsto). O Budget sozinho **alerta, não bloqueia**.
 - **Cost Anomaly Detection** com e-mail diário.
-- **Alarmes** → SNS → e-mail: `5xxErrorRate` do CloudFront (≥ 10% em 5 min) e o disparo do disjuntor.
+- **Alertas** → SNS (`alerts`) → e-mail e canal `#alertas` do Discord: `5xxErrorRate` do CloudFront (≥ 10% em 5 min), o alarme de compute da API (que também aciona o disjuntor) e os achados do Access Analyzer.
+- **Repassador de Alertas** (`alerts-forwarder.mjs`): Lambda própria, porque o AWS Chatbot não suporta Discord. Um arquivo solto empacotado pelo Terraform, como a do disjuntor, que não importa código da API.
+  - Assina os tópicos `alerts` e `kill_switch`. O `kill_switch` é onde chega o aviso de 100% do Budget (cada aviso do Budget aceita um único tópico). O alarme de compute publica nos dois tópicos e vira uma mensagem só: do `kill_switch` sai apenas o que não é alarme.
+  - Um embed por Alerta: alarme (nome, estado, descrição e motivo), achado do Access Analyzer (recurso, tipo, público, principal, ações), disjuntor acionado pelo Budget ou pelo alarme de compute (com o `make api-enable`) e, para formato desconhecido, o texto cru. Nenhum Alerta se perde: campo sem valor vira "—" (o Discord recusa campo em branco), e um erro na formatação manda o texto cru. Menções desligadas e tudo cortado nos limites do Discord.
+  - Lê o webhook do `#alertas` (`discord-alerts-webhook`) do SSM a cada execução (gratuito; ele só roda quando há Alerta), então um webhook trocado vale já para o próximo Alerta. A role dele só pode ler esse parâmetro. A URL nunca vai para variável de ambiente, state ou log.
+  - Falha do Discord só vai para o log (o e-mail do tópico é a reserva). Logs com retenção de 14 dias.
+  - Custo: só roda quando há Alerta; logs mínimos.
 - **Auditoria**:
   - **CloudTrail** multi-região com eventos de gerenciamento (a primeira cópia é gratuita) num bucket próprio, com validação de integridade dos logs e expiração em 1 ano — custo de centavos de S3. Eventos de dados e Insights (cobrados por evento) ficam desligados.
-  - **IAM Access Analyzer** de acesso externo (gratuito), com achados enviados por e-mail via EventBridge → SNS. O analisador de acesso não usado (pago) fica de fora.
+  - **IAM Access Analyzer** de acesso externo (gratuito), com achados enviados via EventBridge → SNS (`alerts`). O analisador de acesso não usado (pago) fica de fora.
 - **Endurecimento**: todos os buckets recusam acesso sem TLS; registro **CAA** no DNS (só a Amazon emite certificados para o domínio); ECR guarda as 5 imagens mais recentes (~1 GB cada).
 - **Riscos residuais aceitos** (documentados, sem custo fixo para eliminar):
   - a role de deploy do CI lê a URL **direta** do banco para migrar — quem controla o deploy controla os dados. Ela não enxerga mais as chaves JWT nem a URL da app (segredos lidos pela Lambda no boot); separar as migrations num processo com aprovação própria seria o próximo passo, desproporcional para este projeto;
@@ -188,7 +194,7 @@ A API (ver `backend.md`) e o futuro front em React só rodam localmente em Docke
 - Estimativa mensal: CloudFront, WAF e Route 53 cobertos pelo plano (US$ 0); Lambda, S3, ECR, CloudWatch e SNS em centavos ou nas cotas gratuitas; **total ~US$ 0–1**. Custo residual sob ataque distribuído: invocações da Lambda que passarem pelo WAF e pelo cache — limitado pelo disjuntor.
 
 ### Makefile (targets de nuvem)
-- `aws-configure`, `aws-login`, `tf-bootstrap`, `tf-init`, `tf-plan`, `tf-apply`, `aws` e `tf` (comandos avulsos), `tf-fmt`, `ci-lint`, `db-secrets`, `discord-secrets` (webhooks do Discord), `seed-prod` (admin de produção no Neon), `api-publish` (primeira imagem / fallback), `plan-subscribe` (plano Free do CloudFront), `api-restart` (instâncias novas após trocar um segredo no SSM), `api-enable` (religa a API após o disjuntor), `smoke`. Todos via containers, como o usuário do host.
+- `aws-configure`, `aws-login`, `tf-bootstrap`, `tf-init`, `tf-plan`, `tf-apply`, `aws` e `tf` (comandos avulsos), `tf-fmt`, `ci-lint`, `test-infra` (testes da formatação dos Alertas), `db-secrets`, `discord-secrets` (webhooks do Discord), `seed-prod` (admin de produção no Neon), `api-publish` (primeira imagem / fallback), `plan-subscribe` (plano Free do CloudFront), `api-restart` (instâncias novas após trocar um segredo no SSM), `api-enable` (religa a API após o disjuntor), `smoke`. Todos via containers, como o usuário do host.
 
 ## Testing Decisions
 
@@ -201,6 +207,7 @@ A API (ver `backend.md`) e o futuro front em React só rodam localmente em Docke
   - `/api/health` 200.
   - Driver S3, OAC, WAF e cache de borda não são testáveis sem a AWS; ficam no smoke test.
 - **Seam 2 — smoke test pós-deploy** (target `smoke` e etapa do pipeline): `/api/health` 200; `/api/portfolio` 200 com `Cache-Control` público; `/api/cv` 200 com corpo PDF; `/api/admin/profile` 401 com `no-store`; `/api/docs` 404; raiz 200 com HSTS; deep link do SPA 200; `/uploads/<inexistente>` 404; HTTP → HTTPS 301.
+- **Seam 3 — formatação do repassador de Alertas** (`alerts-forwarder.test.mjs`, `node --test` sem dependências, target `test-infra`): uma notificação SNS de exemplo por formato vira o embed certo, ou nenhum no caso da cópia do alarme de compute vinda do `kill_switch`.
 - **Checagem estática**: `terraform fmt`/`validate` (target `tf-fmt`) e actionlint + shellcheck nos workflows (target `ci-lint`).
 - Restore do backup executado manualmente uma vez em um branch do Neon e documentado.
 
