@@ -1,6 +1,6 @@
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import request from 'supertest';
-import { adminToken, createApp, fakeWebhook, resetDb } from './helpers';
+import { createApp, fakeWebhook, resetDb } from './helpers';
 
 describe('contact', () => {
   let app: NestExpressApplication;
@@ -75,13 +75,9 @@ describe('health', () => {
 });
 
 describe('test error', () => {
-  it('lets only the admin force a 500, to check the API error Alertas end to end', async () => {
+  it('forces a 500 for anyone, to check the API error Alertas end to end (temporary)', async () => {
     const app = await createApp();
-    await resetDb(app);
-    const http = request(app.getHttpServer());
-    await http.get('/api/admin/test-error').expect(401);
-    const token = await adminToken(app);
-    await http.get('/api/admin/test-error').set('X-Authorization', `Bearer ${token}`).expect(500);
+    await request(app.getHttpServer()).get('/api/test-error').expect(500);
     await app.close();
   });
 });
