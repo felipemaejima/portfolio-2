@@ -157,7 +157,8 @@ resource "aws_lambda_function" "api" {
   lifecycle {
     # Infrastructure vs. release: CI swaps the image; an apply must never roll a deploy back.
     # The kill switch sets reserved concurrency to 0; an apply must never silently turn the API back on.
-    ignore_changes = [image_uri, reserved_concurrent_executions]
+    # `make api-restart` stamps the description to force new instances; that's not drift.
+    ignore_changes = [image_uri, reserved_concurrent_executions, description]
   }
 }
 
