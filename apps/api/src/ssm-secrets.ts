@@ -7,6 +7,7 @@ const SECRETS = {
   JWT_REFRESH_SECRET: 'jwt-refresh-secret',
   DISCORD_CONTACT_WEBHOOK_URL: 'discord-contact-webhook',
   DISCORD_ALERTS_WEBHOOK_URL: 'discord-alerts-webhook',
+  DISCORD_VISITS_WEBHOOK_URL: 'discord-visits-webhook',
 } as const;
 
 type SsmClient = Pick<SSMClient, 'send'>;

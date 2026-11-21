@@ -6,6 +6,7 @@ import { paragraphs, splitItems } from '../lib/text';
 import type { Portfolio } from '../lib/types';
 import { useFetch } from '../lib/use-fetch';
 import { useReveal } from '../lib/use-reveal';
+import { announceVisit } from '../lib/visit';
 import { ContactForm } from './ContactForm';
 import { ProjectCard } from './ProjectCard';
 import { SiteHeader } from './SiteHeader';
@@ -13,6 +14,7 @@ import { SiteHeader } from './SiteHeader';
 export function PortfolioPage() {
   const { lang, t } = useLang();
   const { data, error, loading } = useFetch<Portfolio>(`/portfolio?lang=${lang}`);
+  useEffect(() => announceVisit('/', lang), [lang]);
   useReveal(data);
   // The sections only exist once the portfolio loads, after the browser gave up on the URL's #anchor (a nav link from
   // another page, a shared link): go there now, once. The CSS sets how (smooth unless reduced motion, under the header).

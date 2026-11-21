@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Link, NavLink, Navigate, Route, Routes, useParams } from 'react-router';
 import { ApiError, login, logout, refreshSession } from '../lib/api';
 import { ThemeToggle } from '../lib/theme';
+import { markAdminBrowser } from '../lib/visit';
 import { AccountPage } from './AccountPage';
 import { CollectionPage } from './CollectionPage';
 import { COLLECTIONS } from './collections';
@@ -89,6 +90,7 @@ function LoginPage({ notice, onLoggedIn }: { notice?: string; onLoggedIn: () => 
     setError(undefined);
     try {
       await login(form.get('email') as string, form.get('password') as string);
+      markAdminBrowser(); // this browser never counts as a Visita
       onLoggedIn();
     } catch (e) {
       setError(e instanceof ApiError && e.status === 401 ? 'E-mail ou senha incorretos.' : (e as Error).message);

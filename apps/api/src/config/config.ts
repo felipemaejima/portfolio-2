@@ -28,9 +28,10 @@ const schema = z
     /** Base of public upload URLs; defaults to the API serving them itself (local driver). */
     UPLOADS_PUBLIC_URL: z.url().optional(),
     /** Discord webhooks: secrets, read from SSM at boot in production (ssm-secrets.ts). Unset outside production:
-     * messages are only logged. #contato: Mensagens de contato; #alertas: Logins. */
+     * messages are only logged. #contato: Mensagens de contato; #alertas: Logins; #visitas: Visitas. */
     DISCORD_CONTACT_WEBHOOK_URL: z.url().optional(),
     DISCORD_ALERTS_WEBHOOK_URL: z.url().optional(),
+    DISCORD_VISITS_WEBHOOK_URL: z.url().optional(),
   })
   .refine((c) => c.JWT_ACCESS_SECRET !== c.JWT_REFRESH_SECRET, {
     message: 'must differ from JWT_ACCESS_SECRET',
@@ -42,7 +43,8 @@ const schema = z
   })
   .superRefine((c, ctx) => {
     if (c.NODE_ENV !== 'production') return;
-    for (const key of ['DISCORD_CONTACT_WEBHOOK_URL', 'DISCORD_ALERTS_WEBHOOK_URL'] as const) {
+    const webhooks = ['DISCORD_CONTACT_WEBHOOK_URL', 'DISCORD_ALERTS_WEBHOOK_URL', 'DISCORD_VISITS_WEBHOOK_URL'] as const;
+    for (const key of webhooks) {
       if (!c[key]) ctx.addIssue({ code: 'custom', message: 'required in production', path: [key] });
     }
   })
