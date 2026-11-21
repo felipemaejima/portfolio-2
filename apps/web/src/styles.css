@@ -327,7 +327,7 @@ main.section > h1 { font-size: 32px; margin-bottom: 24px; }
 .toast-error p { color: var(--color-danger); }
 /* Confirmation (delete, discard changes): a small centered box, on phones too (not full screen like the forms). */
 .modal.confirm {
-  width: min(440px, calc(100vw - 32px)); height: auto; margin: auto;
+  width: min(440px, calc(100vw - 32px)); height: fit-content; margin: auto;
   border: 1px solid var(--color-divider); border-radius: 14px;
 }
 .confirm h2 { margin: 0; font-size: 20px; }
