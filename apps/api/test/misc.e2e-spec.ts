@@ -74,14 +74,6 @@ describe('health', () => {
   });
 });
 
-describe('test error', () => {
-  it('forces a 500 for anyone, to check the API error Alertas end to end (temporary)', async () => {
-    const app = await createApp();
-    await request(app.getHttpServer()).get('/api/test-error').expect(500);
-    await app.close();
-  });
-});
-
 describe('swagger', () => {
   it('is served outside production', async () => {
     const app = await createApp();

@@ -199,7 +199,6 @@ Público (sem auth):
 - `GET /projects?lang=&tags=&tagsMode=any|all&featured=&q=&sort=position|-createdAt&page=&pageSize=`.
 - `GET /cv?lang=`.
 - `POST /visits` — anuncia uma Visita no `#visitas` do Discord: valida `{ page: '/'|'/projetos', lang: 'pt'|'en', referrer? }`, um por IP a cada 24 h (429 depois), teto de 50 no site inteiro a cada 24 h; responde **204** (ver Visita).
-- `GET /test-error` — **temporário**: sempre **500**, logado com nível `error`, para testar de ponta a ponta o Alerta de erros da API (log → filtro → alarme → `#alertas`). Público por decisão do dono, sem limite (o contador no Postgres acordaria o banco a cada chamada) e fora da documentação Swagger. Qualquer um dispara os alarmes de erro e de 5xx com ela: apagar depois dos testes.
 - `POST /contact` — valida `{ name, email, message, honeypot? }`, passa pelo throttle (3 por minuto por IP), envia ao `#contato` do Discord e responde **204**; **502** se o Discord falhar (ver Contato).
 
 Auth:

@@ -153,6 +153,7 @@ na conta, guardada por 1 ano).
 | Ver/aplicar mudanças de infra | `make tf-plan` / `make tf-apply` |
 | Formatar e validar Terraform / workflows | `make tf-fmt` / `make ci-lint` |
 | Testar a formatação dos Alertas | `make test-infra` |
+| Testar um alarme de ponta a ponta | `make aws ARGS="cloudwatch set-alarm-state --region us-east-1 --alarm-name <alarme> --state-value ALARM --state-reason teste"` e depois o mesmo com `OK` (a volta não avisa). **Nunca** com `portfolio-prod-api-compute-runaway`: ele desliga a API |
 | Trocar credenciais do banco | `make db-secrets` e depois `make api-restart` (a Lambda lê os segredos do SSM só ao iniciar) |
 | Trocar um webhook do Discord | criar o webhook novo no canal, `make discord-secrets` (em branco mantém a URL atual), `make api-restart` e apagar o antigo no Discord (o repassador de Alertas lê a URL a cada Alerta) |
 | Deploy manual da API (fallback) | `make api-publish` e `make aws ARGS='lambda update-function-code --function-name <nome> --image-uri <uri>'` — não roda migrations: se o código tiver migration nova, prefira o workflow |
