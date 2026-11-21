@@ -17,9 +17,15 @@ export class HealthController {
   }
 }
 
-/** Admin only: a forced 500, logged at error level, to check the API error Alertas end to end (docs/specs/infra.md). */
+/**
+ * TEMPORARY, public on the owner's call: a forced 500, logged at error level, to check the API error Alertas end to
+ * end (docs/specs/infra.md). Anyone can trip the error and 5xx alarms with it (and, while they are in ALARM, a real
+ * error makes no new Alerta), so delete it once the checks are done. No rate limit on purpose: the Postgres counter
+ * would wake the database on every call; this route touches nothing.
+ */
 @ApiExcludeController()
-@Controller('admin/test-error')
+@Public()
+@Controller('test-error')
 export class TestErrorController {
   @Get()
   fail(): never {
