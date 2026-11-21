@@ -2,7 +2,8 @@ resource "aws_sns_topic" "alerts" {
   name = "${local.name}-alerts"
 }
 
-# Who may publish: CloudWatch alarms and the Access Analyzer EventBridge rule (audit.tf) of this account.
+# Who may publish: CloudWatch alarms, the Access Analyzer EventBridge rule (audit.tf), the budget and Cost Anomaly
+# Detection of this account.
 # (A custom policy replaces the default one, so each service publisher must be listed; SNS requires a unique Sid each.)
 resource "aws_sns_topic_policy" "alerts" {
   arn = aws_sns_topic.alerts.arn
@@ -24,6 +25,25 @@ resource "aws_sns_topic_policy" "alerts" {
         Action    = "SNS:Publish"
         Resource  = aws_sns_topic.alerts.arn
         Condition = { ArnEquals = { "aws:SourceArn" = aws_cloudwatch_event_rule.access_analyzer_findings.arn } }
+      },
+      {
+        Sid       = "BudgetNotices"
+        Effect    = "Allow"
+        Principal = { Service = "budgets.amazonaws.com" }
+        Action    = "SNS:Publish"
+        Resource  = aws_sns_topic.alerts.arn
+        Condition = {
+          StringEquals = { "aws:SourceAccount" = local.account_id }
+          ArnLike      = { "aws:SourceArn" = "arn:aws:budgets::${local.account_id}:*" }
+        }
+      },
+      {
+        Sid       = "CostAnomalies"
+        Effect    = "Allow"
+        Principal = { Service = "costalerts.amazonaws.com" }
+        Action    = "SNS:Publish"
+        Resource  = aws_sns_topic.alerts.arn
+        Condition = { StringEquals = { "aws:SourceAccount" = local.account_id } }
       },
     ]
   })
@@ -119,6 +139,8 @@ resource "aws_budgets_budget" "monthly" {
     include_refund = false
   }
 
+  # The direct emails stay ON PURPOSE, next to the `alerts` topic (Discord #alertas + its email): they don't depend on
+  # the topic's email subscription, which once expired unnoticed. Don't "clean up" the double email.
   dynamic "notification" {
     for_each = [50, 80]
     content {
@@ -127,10 +149,12 @@ resource "aws_budgets_budget" "monthly" {
       threshold                  = notification.value
       threshold_type             = "PERCENTAGE"
       subscriber_email_addresses = [var.alert_email]
+      subscriber_sns_topic_arns  = [aws_sns_topic.alerts.arn]
     }
   }
 
-  # 100% actual: email AND the kill switch below.
+  # 100% actual: email AND the kill switch below (a notification takes a single topic; the Alertas forwarder also
+  # listens to the kill switch topic).
   notification {
     notification_type          = "ACTUAL"
     comparison_operator        = "GREATER_THAN"
@@ -147,7 +171,10 @@ resource "aws_budgets_budget" "monthly" {
     threshold                  = 100
     threshold_type             = "PERCENTAGE"
     subscriber_email_addresses = [var.alert_email]
+    subscriber_sns_topic_arns  = [aws_sns_topic.alerts.arn]
   }
+
+  depends_on = [aws_sns_topic_policy.alerts] # the budget must be allowed to publish first
 }
 
 # New accounts may already have AWS's default services monitor, and only one such monitor is allowed. Then its ARN
@@ -164,6 +191,29 @@ resource "aws_ce_anomaly_monitor" "services" {
   name              = "${local.name}-services"
   monitor_type      = "DIMENSIONAL"
   monitor_dimension = "SERVICE"
+}
+
+# A second subscription on the same monitor, to the `alerts` topic (Discord #alertas). SNS only takes IMMEDIATE; the
+# daily email above stays, on purpose (see the budget).
+resource "aws_ce_anomaly_subscription" "alerts" {
+  name             = "${local.name}-anomalies-alerts"
+  frequency        = "IMMEDIATE"
+  monitor_arn_list = [aws_ce_anomaly_monitor.services.arn]
+
+  subscriber {
+    type    = "SNS"
+    address = aws_sns_topic.alerts.arn
+  }
+
+  threshold_expression {
+    dimension {
+      key           = "ANOMALY_TOTAL_IMPACT_ABSOLUTE"
+      match_options = ["GREATER_THAN_OR_EQUAL"]
+      values        = ["1"]
+    }
+  }
+
+  depends_on = [aws_sns_topic_policy.alerts] # Cost Anomaly Detection checks it may publish when subscribing
 }
 
 resource "aws_ce_anomaly_subscription" "email" {

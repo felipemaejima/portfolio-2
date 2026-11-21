@@ -41,11 +41,11 @@ test('an Access Analyzer finding shows the exposed resource and who can reach it
   };
   const embed = toEmbed({ TopicArn: ALERTS, Message: JSON.stringify(finding) });
   assert.match(embed.title, /Access Analyzer/);
-  const field = (name) => embed.fields.find((f) => f.name === name)?.value;
-  assert.equal(field('Recurso'), 'arn:aws:s3:::portfolio-prod-uploads');
-  assert.equal(field('Público'), 'sim');
-  assert.equal(field('Ações'), 's3:GetObject');
-  assert.match(field('Principal'), /"AWS":"\*"/);
+  const valueOf = (name) => embed.fields.find((f) => f.name === name)?.value;
+  assert.equal(valueOf('Recurso'), 'arn:aws:s3:::portfolio-prod-uploads');
+  assert.equal(valueOf('Público'), 'sim');
+  assert.equal(valueOf('Ações'), 's3:GetObject');
+  assert.match(valueOf('Principal'), /"AWS":"\*"/);
 
   // A finding may lack principal and action (e.g. status with an error): Discord rejects blank field values.
   const detail = { resource: 'arn:aws:s3:::x', resourceType: 'AWS::S3::Bucket', error: 'ACCESS_DENIED' };
@@ -69,6 +69,58 @@ test('the compute alarm trips the kill switch: one message, its copy on the kill
   assert.match(embed.title, /Disjuntor/);
   assert.match(embed.description, /make api-enable/);
   assert.deepEqual(embed.fields, [{ name: 'Alarme', value: 'portfolio-prod-api-compute-runaway', inline: false }]);
+});
+
+test('a budget notice (50%, 80%, forecast) shows the budget, the threshold and the amount', () => {
+  // As AWS Budgets publishes it to SNS: plain text.
+  const notice = [
+    'AWS Budget Notification November 21, 2026',
+    'AWS Account 111122223333',
+    '',
+    'Dear AWS Customer,',
+    '',
+    'You requested that we alert you when the FORECASTED Cost associated with your portfolio-prod-monthly budget ...',
+    '',
+    'Budget Name: portfolio-prod-monthly',
+    'Budget Type: Cost',
+    'Budgeted Amount: $11.00',
+    'Alert Type: FORECASTED',
+    'Alert Threshold: > $11.00',
+    'FORECASTED Amount: $12.40',
+  ].join('\n');
+  const embed = toEmbed({ TopicArn: ALERTS, Subject: 'AWS Budgets: monthly has exceeded', Message: notice });
+  assert.match(embed.title, /Orçamento/);
+  assert.deepEqual(embed.fields.map((f) => [f.name, f.value]), [
+    ['Orçamento', 'portfolio-prod-monthly'],
+    ['Limite', '$11.00'],
+    ['Gatilho', 'FORECASTED > $11.00'],
+    ['Valor', '$12.40'],
+  ]);
+});
+
+test('a cost anomaly shows the impact, the period and the root cause, linking to the console', () => {
+  // As Cost Anomaly Detection publishes it to SNS (IMMEDIATE): JSON.
+  const anomaly = {
+    anomalyId: '12345678-abcd-ef12-3456-987654321a12',
+    anomalyDetailsLink: 'https://console.aws.amazon.com/cost-management/home#/anomaly-detection/anomalies/x',
+    anomalyStartDate: '2026-11-20T00:00:00Z',
+    anomalyEndDate: '2026-11-21T00:00:00Z',
+    dimensionalValue: 'AWS Lambda',
+    impact: { totalActualSpend: 4.2, totalExpectedSpend: 0.2, totalImpact: 4, totalImpactPercentage: 2000 },
+    rootCauses: [{ service: 'AWS Lambda', region: 'us-east-1', usageType: 'Lambda-GB-Second-ARM' }],
+  };
+  const embed = toEmbed({ TopicArn: ALERTS, Message: JSON.stringify(anomaly) });
+  assert.match(embed.title, /Anomalia de custo: AWS Lambda/);
+  assert.equal(embed.url, anomaly.anomalyDetailsLink);
+  const valueOf = (name) => embed.fields.find((f) => f.name === name)?.value;
+  assert.equal(valueOf('Impacto'), 'US$ 4.00 (real US$ 4.20, esperado US$ 0.20)');
+  assert.equal(valueOf('Período'), '2026-11-20 → 2026-11-21');
+  assert.equal(valueOf('Causa'), 'AWS Lambda · us-east-1 · Lambda-GB-Second-ARM');
+
+  const bareAnomaly = { anomalyId: 'x', impact: null, rootCauses: null };
+  const bare = toEmbed({ TopicArn: ALERTS, Message: JSON.stringify(bareAnomaly) });
+  assert.match(bare.title, /Anomalia de custo/);
+  assert.ok(bare.fields.every((f) => f.value.length > 0));
 });
 
 test('an unknown format still arrives, as raw text, cut to Discord limits', () => {

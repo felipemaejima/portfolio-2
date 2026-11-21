@@ -111,9 +111,10 @@ coloque-o em `existing_anomaly_monitor_arn` no `terraform.tfvars` e rode `make t
 "1 to import" e o Terraform passa a gerenciar o monitor existente. Não use `terraform import` pela linha de comando:
 depois de um apply interrompido, ele falha com *Invalid index*.
 
-Confirme o e-mail de assinatura do SNS que chega em seguida: por ele vêm os alertas de erro do site, o aviso de
-disparo do disjuntor e os achados do IAM Access Analyzer (algo acessível de fora da conta). Budgets e anomalias de
-custo mandam e-mail direto, sem confirmação. O apply também liga a trilha do CloudTrail (auditoria de quem fez o quê
+Confirme o e-mail de assinatura do SNS que chega em seguida: por ele vêm os Alertas (erros do site e da API, disparo
+do disjuntor, achados do IAM Access Analyzer, avisos do Budget e anomalias de custo), que também chegam ao `#alertas`
+do Discord. Budgets e anomalias de custo também mandam e-mail direto, sem confirmação: em dobro, de propósito, para
+não depender só da inscrição do SNS. O apply também liga a trilha do CloudTrail (auditoria de quem fez o quê
 na conta, guardada por 1 ano).
 
 
@@ -189,7 +190,7 @@ fora para dentro:
    estático continua no ar e você recebe e-mail. Investigue e religue com `make api-enable` — um `terraform apply`
    nunca religa sozinho.
 
-Budgets também avisam por e-mail em 50/80% e na previsão de estouro. A auditoria (CloudTrail + IAM Access Analyzer)
+Budgets também avisam em 50/80% e na previsão de estouro (e-mail e `#alertas`). A auditoria (CloudTrail + IAM Access Analyzer)
 custa centavos de S3.
 
 

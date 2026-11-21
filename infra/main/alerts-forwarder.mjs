@@ -21,6 +21,15 @@ const killSwitchTripped = (details) => ({
   color: COLORS.ALARM,
 });
 
+const usd = (amount) => (typeof amount === 'number' ? `US$ ${amount.toFixed(2)}` : '—');
+const day = (date) => String(date ?? '').slice(0, 10) || '—';
+
+/** The "Key: value" lines of an AWS Budgets notice (plain text), or undefined when it isn't one. */
+function budgetNotice(text) {
+  if (typeof text !== 'string' || !text.startsWith('AWS Budget Notification')) return undefined;
+  return Object.fromEntries([...text.matchAll(/^([A-Za-z ]+): (.+)$/gm)].map(([, key, value]) => [key, value.trim()]));
+}
+
 function parseJson(text) {
   try {
     return JSON.parse(text);
@@ -67,7 +76,44 @@ export function toEmbed({ TopicArn, Subject, Message }) {
     };
   }
 
+  if (typeof data?.anomalyId === 'string') return costAnomaly(data);
+  const notice = budgetNotice(Message);
+  if (notice) return budgetAlert(notice);
+
   return unknown({ Subject, Message });
+}
+
+/** Cost Anomaly Detection, IMMEDIATE subscription: JSON. */
+function costAnomaly(anomaly) {
+  const impact = anomaly.impact ?? {};
+  const cause = anomaly.rootCauses?.[0] ?? {};
+  const link = anomaly.anomalyDetailsLink;
+  const spend = `real ${usd(impact.totalActualSpend)}, esperado ${usd(impact.totalExpectedSpend)}`;
+  return {
+    title: cut(`Anomalia de custo: ${anomaly.dimensionalValue ?? 'AWS'}`, TITLE_MAX),
+    url: /^https:\/\//.test(link ?? '') ? link : undefined, // Discord rejects an invalid URL
+    fields: [
+      field('Impacto', `${usd(impact.totalImpact)} (${spend})`),
+      field('Período', `${day(anomaly.anomalyStartDate)} → ${day(anomaly.anomalyEndDate)}`),
+      field('Causa', [cause.service, cause.region, cause.usageType].filter(Boolean).join(' · ')),
+    ],
+    color: COLORS.ALARM,
+  };
+}
+
+/** AWS Budgets at 50%, 80% or forecast (100% goes to the kill switch topic): parsed from its plain text. */
+function budgetAlert(notice) {
+  const type = notice['Alert Type'];
+  return {
+    title: `Orçamento: ${type === 'FORECASTED' ? 'a previsão' : 'o gasto'} passou do gatilho`,
+    fields: [
+      field('Orçamento', notice['Budget Name']),
+      field('Limite', notice['Budgeted Amount']),
+      field('Gatilho', [type, notice['Alert Threshold']].filter(Boolean).join(' ')),
+      field('Valor', notice[`${type} Amount`]),
+    ],
+    color: COLORS.ALARM,
+  };
 }
 
 /** Unknown format, or one that broke the formatting: the raw text. No Alerta may be lost. */
