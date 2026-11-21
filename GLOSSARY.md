@@ -2,6 +2,12 @@
 
 Site pessoal: um site público com o trabalho do dono e um painel admin onde ele o edita.
 
+## Site público
+
+**Projeto em destaque**:
+Projeto que o dono marcou para aparecer na home e no CV. O que está no centro do carrossel da home num dado momento é o projeto em foco, não um projeto em destaque.
+_Evitar_: destaque (para o projeto em foco)
+
 ## Avisos ao dono
 
 **Visita**:
