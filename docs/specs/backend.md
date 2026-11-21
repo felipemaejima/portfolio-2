@@ -142,6 +142,7 @@ Uma API em NestJS + Prisma + PostgreSQL que é a fonte única do conteúdo do po
 - **Revogação**: o admin tem `tokenVersion` (int). O refresh carrega a versão; o endpoint de refresh compara com o banco (única leitura de estado). Logout e troca de senha fazem `tokenVersion++`, invalidando todos os refresh tokens.
 - Segredos distintos para access e refresh; algoritmo fixado na verificação.
 - Senha com **argon2id**. Mensagem de erro de login genérica. Tamanho mínimo configurável por `PASSWORD_MIN_LENGTH` (padrão 5), aplicado na troca de senha e no seed.
+- **Aviso de Login**: cada Login (e-mail e senha corretos) gera uma mensagem **silenciosa** (flag `SUPPRESS_NOTIFICATIONS`) no `#alertas` do Discord, com IP real (header da borda), navegador (user agent cortado em 200 caracteres) e horário (`timestamp` do embed, mostrado no fuso de quem lê). Um Login que não foi o dono é um incidente. Refresh e senha errada não avisam. Webhook em `DISCORD_ALERTS_WEBHOOK_URL` (`discord-alerts-webhook` no SSM), obrigatório em produção. O Discord com erro ou lento (até ~2 s) **não bloqueia o Login**: a falha vai para o log com nível `error`, que o alarme de erros da API pega. País fica de fora: o plano Free do CloudFront não repassa esse header.
 - Sem signup público; admin criado por **seed idempotente** a partir de `ADMIN_EMAIL`/`ADMIN_PASSWORD`.
 - MFA fora de escopo.
 
