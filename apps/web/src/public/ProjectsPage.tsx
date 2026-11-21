@@ -5,6 +5,7 @@ import { useLang } from '../lib/i18n';
 import { sameTag, selectedTags, toggleTag, uniqueTags } from '../lib/tag-filter';
 import type { Page, Portfolio, Project } from '../lib/types';
 import { useFetch } from '../lib/use-fetch';
+import { announceVisit } from '../lib/visit';
 import { ProjectCard } from './ProjectCard';
 import { SiteHeader } from './SiteHeader';
 
@@ -13,6 +14,7 @@ const PAGE_SIZE = 12;
 /** All visible projects. Filters live in the URL, so a filtered list can be shared. */
 export function ProjectsPage() {
   const { lang, t } = useLang();
+  useEffect(() => announceVisit('/projetos', lang), [lang]);
   const [params, setParams] = useSearchParams();
   const page = Number(params.get('page') ?? 1);
 

@@ -1728,6 +1728,31 @@
         ]
       }
     },
+    "/visits": {
+      "post": {
+        "operationId": "VisitsController_announce",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VisitDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Announced, or silently dropped over the daily cap"
+          }
+        },
+        "summary": "The site calls this at most once a day per browser. Here, one call per IP a day (the guard, counted before the\ncap so a repeat never spends it), then the site-wide cap. The message never carries the IP: it is personal data\n(LGPD) and Discord is a third party. Discord failing is logged at error level; the site doesn't wait on the answer.",
+        "tags": [
+          "public"
+        ]
+      }
+    },
     "/health": {
       "get": {
         "operationId": "HealthController_check",
@@ -2284,6 +2309,10 @@
         }
       },
       "ContactDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "VisitDto": {
         "type": "object",
         "properties": {}
       }

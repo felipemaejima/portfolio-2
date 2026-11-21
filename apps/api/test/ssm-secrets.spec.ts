@@ -21,6 +21,7 @@ describe('loadSecretsFromSsm', () => {
       '/portfolio/prod/jwt-refresh-secret': 'refresh',
       '/portfolio/prod/discord-contact-webhook': 'https://discord.test/contact',
       '/portfolio/prod/discord-alerts-webhook': 'https://discord.test/alerts',
+      '/portfolio/prod/discord-visits-webhook': 'https://discord.test/visits',
     });
 
     await loadSecretsFromSsm(env, ssm as never);
@@ -31,6 +32,7 @@ describe('loadSecretsFromSsm', () => {
       JWT_REFRESH_SECRET: 'refresh',
       DISCORD_CONTACT_WEBHOOK_URL: 'https://discord.test/contact',
       DISCORD_ALERTS_WEBHOOK_URL: 'https://discord.test/alerts',
+      DISCORD_VISITS_WEBHOOK_URL: 'https://discord.test/visits',
     });
     expect(ssm.send.mock.calls[0][0].input.WithDecryption).toBe(true);
   });

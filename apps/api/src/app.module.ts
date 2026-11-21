@@ -14,6 +14,7 @@ import { PrismaModule, PrismaService } from './prisma/prisma.service';
 import { ProfileModule } from './profile/profile.module';
 import { ProjectsModule } from './projects/projects.module';
 import { ServicesModule } from './services/services.module';
+import { VisitsModule } from './visits/visits.controller';
 import { SkillsModule } from './skills/skills.module';
 import { SocialLinksModule } from './social-links/social-links.module';
 import { StorageModule } from './storage/storage.service';
@@ -44,6 +45,7 @@ import { StorageModule } from './storage/storage.service';
     PortfolioModule,
     CvModule,
     ContactModule,
+    VisitsModule,
     HealthModule,
   ],
 })

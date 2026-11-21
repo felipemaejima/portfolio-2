@@ -198,6 +198,7 @@ Público (sem auth):
 - `GET /portfolio?lang=` — agregado: perfil, links sociais, categorias com skills, projetos featured, experiências, formação, serviços. Só itens visíveis, ordenados por `position`.
 - `GET /projects?lang=&tags=&tagsMode=any|all&featured=&q=&sort=position|-createdAt&page=&pageSize=`.
 - `GET /cv?lang=`.
+- `POST /visits` — anuncia uma Visita no `#visitas` do Discord: valida `{ page: '/'|'/projetos', lang: 'pt'|'en', referrer? }`, um por IP a cada 24 h (429 depois), teto de 50 no site inteiro a cada 24 h; responde **204** (ver Visita).
 - `POST /contact` — valida `{ name, email, message, honeypot? }`, passa pelo throttle (3 por minuto por IP), envia ao `#contato` do Discord e responde **204**; **502** se o Discord falhar (ver Contato).
 
 Auth:
@@ -215,6 +216,16 @@ Admin (`/admin/*`, JWT obrigatório):
 - **Honeypot**: campo `honeypot`, invisível e fora da ordem de tabulação no formulário, com um nome que nenhum preenchimento automático reconhece (uma mensagem real nunca pode ser descartada). Preenchido → 204 sem envio.
 - **Falha**: erro do Discord ou demora acima de ~2 s (a Lambda é cobrada enquanto espera) → **502**, e o site mostra erro, nunca um sucesso falso. O log registra o status e o início da resposta de erro do Discord (que aponta o campo recusado), ou o tipo do erro; nunca a URL.
 - **Smoke de produção**: não chama `POST /contact`, que enviaria uma mensagem real.
+
+### Visita (Discord)
+- **Visita** (ver `GLOSSARY.md`): alguém que não é o admin abriu o site público. Cada Visita nova gera uma mensagem no `#visitas` com página, idioma, origem e navegador, e horário (`timestamp`).
+- **No navegador** (`apps/web/src/lib/visit.ts`): as páginas públicas chamam `POST /visits` ao montar, no máximo uma vez a cada 24 h por navegador (`localStorage`), sem a página esperar a resposta. Recarregar ou navegar não chama nada. O navegador onde houve Login fica marcado (`localStorage`, mesma origem que o admin) e nunca anuncia. Sem `localStorage` (bloqueado), não anuncia.
+- **Na API, dois limites**, ambos com contadores no Postgres (`RateLimit`):
+  - **por IP**: um a cada 24 h pelo throttle por IP que já existe (chave sha256, o IP não fica em texto puro); repetição → 429. Ele roda antes do teto, então uma repetição não gasta o teto;
+  - **teto do site inteiro**: 50 avisos a cada 24 h, só para `/visits` (login, refresh e contato não contam nem são afetados). Acima disso → 204 sem envio, sem mensagem de "teto atingido".
+- **Entrada de qualquer um**: página e idioma só de listas fixas (400 fora delas); a origem vira só o domínio do `referrer`, ou "direto" quando vazia ou inválida; navegador cortado em 200 caracteres; menções desligadas. **Sem o IP do visitante**: é dado pessoal (LGPD) e o Discord é um terceiro.
+- **Bots**: sem filtro por enquanto; se aparecerem no `#visitas`, um filtro de uma linha no user agent resolve.
+- **Webhook** em `DISCORD_VISITS_WEBHOOK_URL` (`discord-visits-webhook` no SSM), obrigatório em produção. Falha do Discord → log com nível `error` (o alarme de erros da API pega), resposta 204 mesmo assim.
 
 ### Filtros e paginação
 - **Projects**: `tags` (lista), `tagsMode` (`any` padrão, `all`), `featured`, `q`, `sort`. Tags comparadas em minúsculas; exibição preserva a grafia original.
@@ -251,6 +262,7 @@ Admin (`/admin/*`, JWT obrigatório):
   - Media: upload com extensão falsa (magic bytes inválidos) → 400; excesso de tamanho → 413; delete de mídia referenciada → 409; `unused=true` lista só órfãs.
   - CV: responde `application/pdf`; segundo request com `If-None-Match` → 304; mudança de conteúdo muda o ETag.
   - Contact (webhook falso, um servidor HTTP local): válido com `@everyone` → 204 e um embed com menções desligadas; inválido, em branco ou acima de 4000 (inclusive com emoji) → 400; Discord com erro ou sem resposta → 502; honeypot preenchido → 204 sem envio.
+  - Visits (webhook falso): mensagem com página, idioma, domínio de origem e navegador cortado, sem IP; origem vazia ou inválida → "direto"; página ou idioma fora da lista → 400; mesmo IP em 24 h → 429 sem envio; teto de 50 no site inteiro, com repetição de IP sem gastar o teto e login, refresh e contato normais depois do teto; falha do Discord → 204 e log de erro sem a URL.
   - Swagger: `/api/docs-json` servido fora de produção e indisponível com env de produção.
 - **Unitário**: nenhum — a resolução de `LocalizedText` é uma linha e o fallback já é coberto pelo e2e de i18n.
 - **Prior art**: nenhum — repositório novo; estes testes estabelecem o padrão.
