@@ -246,3 +246,92 @@ resource "aws_sns_topic_subscription" "kill_switch" {
   protocol  = "lambda"
   endpoint  = aws_lambda_function.kill_switch.arn
 }
+
+# ---------------------------------------------------------------------------------------------------------------
+# Alertas forwarder: both topics -> Lambda -> Discord #alertas (AWS Chatbot has no Discord). The email subscription
+# above stays the backstop. It also listens to the kill switch topic, where the budget's 100% notice goes (a budget
+# notification takes a single SNS topic); the compute alarm publishes to both and is sent once, from `alerts`.
+# Runs only when there is an Alerta; minimal logs (costs approved in #53).
+# ---------------------------------------------------------------------------------------------------------------
+data "archive_file" "alerts_forwarder" {
+  type        = "zip"
+  source_file = "${path.module}/alerts-forwarder.mjs"
+  output_path = "${path.module}/.build/alerts-forwarder.zip"
+}
+
+resource "aws_iam_role" "alerts_forwarder" {
+  name               = "${local.name}-alerts-forwarder"
+  assume_role_policy = data.aws_iam_policy_document.lambda_assume.json
+}
+
+resource "aws_iam_role_policy_attachment" "alerts_forwarder_logs" {
+  role       = aws_iam_role.alerts_forwarder.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+# Reads only the #alertas webhook (written by `make discord-secrets`, never by Terraform).
+locals {
+  discord_alerts_webhook = "${local.ssm_prefix}/discord-alerts-webhook"
+}
+
+resource "aws_iam_role_policy" "alerts_forwarder" {
+  role = aws_iam_role.alerts_forwarder.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = "ssm:GetParameter"
+        Resource = "arn:aws:ssm:us-east-1:${local.account_id}:parameter${local.discord_alerts_webhook}"
+      },
+      {
+        Effect    = "Allow"
+        Action    = "kms:Decrypt"
+        Resource  = "*"
+        Condition = { StringEquals = { "kms:ViaService" = "ssm.us-east-1.amazonaws.com" } }
+      },
+    ]
+  })
+}
+
+resource "aws_cloudwatch_log_group" "alerts_forwarder" {
+  name              = "/aws/lambda/${local.name}-alerts-forwarder"
+  retention_in_days = 14
+}
+
+resource "aws_lambda_function" "alerts_forwarder" {
+  function_name    = "${local.name}-alerts-forwarder"
+  role             = aws_iam_role.alerts_forwarder.arn
+  runtime          = "nodejs24.x" # the runtime ships the AWS SDK v3; no bundling needed
+  architectures    = ["arm64"]
+  handler          = "alerts-forwarder.handler"
+  filename         = data.archive_file.alerts_forwarder.output_path
+  source_code_hash = data.archive_file.alerts_forwarder.output_base64sha256
+  timeout          = 15 # SSM read + up to 5 s per Discord post
+
+  environment {
+    variables = {
+      # Where the webhook is, not its value: the function reads it from SSM on each run.
+      WEBHOOK_PARAMETER = local.discord_alerts_webhook
+      KILL_SWITCH_TOPIC = aws_sns_topic.kill_switch.arn
+      KILL_SWITCH_ALARM = aws_cloudwatch_metric_alarm.api_compute_runaway.alarm_name
+    }
+  }
+
+  depends_on = [aws_cloudwatch_log_group.alerts_forwarder, aws_iam_role_policy_attachment.alerts_forwarder_logs]
+}
+
+resource "aws_lambda_permission" "alerts_forwarder_sns" {
+  for_each      = { alerts = aws_sns_topic.alerts.arn, kill_switch = aws_sns_topic.kill_switch.arn }
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.alerts_forwarder.function_name
+  principal     = "sns.amazonaws.com"
+  source_arn    = each.value
+}
+
+resource "aws_sns_topic_subscription" "alerts_forwarder" {
+  for_each  = aws_lambda_permission.alerts_forwarder_sns
+  topic_arn = each.value.source_arn
+  protocol  = "lambda"
+  endpoint  = aws_lambda_function.alerts_forwarder.arn
+}

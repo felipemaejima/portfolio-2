@@ -28,7 +28,7 @@ TF_BOOT     := $(CLOUD) hashicorp/terraform:1.16.4 -chdir=infra/bootstrap
 .DEFAULT_GOAL := help
 
 .PHONY: help up down logs sh install migrate migration seed studio test lint openapi build test-web reset-db \
-        aws-configure aws-login tf-bootstrap tf-init tf-plan tf-apply aws tf tf-fmt ci-lint db-secrets discord-secrets seed-prod api-publish plan-subscribe api-restart api-enable smoke
+        aws-configure aws-login tf-bootstrap tf-init tf-plan tf-apply aws tf tf-fmt ci-lint test-infra db-secrets discord-secrets seed-prod api-publish plan-subscribe api-restart api-enable smoke
 
 help: ## list available commands
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "} {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
@@ -122,6 +122,9 @@ tf-fmt: $(HOME)/.aws ## format + validate Terraform
 
 ci-lint: ## lint the GitHub Actions workflows (actionlint + shellcheck)
 	docker run --rm -v $(CURDIR):/repo -w /repo rhysd/actionlint:1.7.12 -color
+
+test-infra: ## unit tests of the infra Lambdas (Alertas formatting), node --test without dependencies
+	docker run --rm -v $(CURDIR)/infra/main:/w:ro -w /w node:24-slim node --test
 
 db-secrets: $(HOME)/.aws ## store the Neon connection strings in SSM (typed, never echoed or written to disk)
 	@read -rsp "Neon POOLED connection string: " POOLED && echo && \
