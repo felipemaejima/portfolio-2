@@ -53,6 +53,57 @@ resource "aws_cloudwatch_metric_alarm" "site_5xx" {
   alarm_actions       = [aws_sns_topic.alerts.arn]
 }
 
+# ---------------------------------------------------------------------------------------------------------------
+# API errors become Alertas (#57). Missing data is fine: no errors, no data. Together with site_5xx and the compute
+# alarm: 4 alarms and 1 custom metric, inside CloudWatch's free 10 + 10.
+# ---------------------------------------------------------------------------------------------------------------
+# Lines the API logs at level "error" (Nest's JSON logger, stored as-is): unhandled exceptions behind a 500, and the
+# Discord failures Login and Visita swallow. Pattern checked with `aws logs test-metric-filter` against real lines.
+resource "aws_cloudwatch_log_metric_filter" "api_error_logs" {
+  name           = "${local.name}-api-error-logs"
+  log_group_name = aws_cloudwatch_log_group.api.name
+  pattern        = "{ $.level = \"error\" }"
+
+  metric_transformation {
+    name      = "ApiErrorLogs"
+    namespace = "Portfolio"
+    value     = "1"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "api_error_logs" {
+  alarm_name          = "${local.name}-api-error-logs"
+  alarm_description   = "The API logged an error (500, or a swallowed Discord failure) in the last 5 minutes"
+  namespace           = aws_cloudwatch_log_metric_filter.api_error_logs.metric_transformation[0].namespace
+  metric_name         = aws_cloudwatch_log_metric_filter.api_error_logs.metric_transformation[0].name
+  statistic           = "Sum"
+  period              = 300
+  evaluation_periods  = 1
+  threshold           = 1
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+}
+
+# Function errors of the API Lambda, for what the app can't log as JSON: timeouts, and a boot that crashes (a missing
+# SSM parameter makes main.ts throw before the logger exists; Node exits, Runtime.ExitError). AWS docs count timeouts
+# and runtime errors as Errors but don't say so for init crashes, and that wasn't tested outside production (see
+# docs/specs/infra.md); with traffic, site_5xx also catches an API that can't boot.
+resource "aws_cloudwatch_metric_alarm" "api_errors" {
+  alarm_name          = "${local.name}-api-errors"
+  alarm_description   = "The API Lambda had function errors (crash or timeout) in the last 5 minutes"
+  namespace           = "AWS/Lambda"
+  metric_name         = "Errors"
+  dimensions          = { FunctionName = aws_lambda_function.api.function_name }
+  statistic           = "Sum"
+  period              = 300
+  evaluation_periods  = 1
+  threshold           = 1
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+}
+
 # Budgets ALERT, they never stop spending: AWS has no native hard cap. The kill switch below is ours.
 resource "aws_budgets_budget" "monthly" {
   name         = "${local.name}-monthly"
