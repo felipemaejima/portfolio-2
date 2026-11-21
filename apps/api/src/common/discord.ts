@@ -5,16 +5,24 @@ export type DiscordEmbed = {
   title: string;
   description?: string;
   fields?: { name: string; value: string; inline?: boolean }[];
+  /** ISO 8601; Discord shows it in each reader's own time zone. */
+  timestamp?: string;
 };
+
+/** Cuts visitor-supplied text to `max` characters, marking the cut. */
+export const cut = (text: string, max: number) => (text.length > max ? `${text.slice(0, max)}…` : text);
 
 const logger = new Logger('Discord');
 
 /**
- * Posts one embed to a Discord webhook and waits at most ~2 s for it (the Lambda is billed while it waits).
+ * Posts one embed to a Discord webhook and waits at most ~2 s for it (the Lambda is billed while it waits; it freezes
+ * after answering, so fire-and-forget isn't an option). `silent` posts without notifying (SUPPRESS_NOTIFICATIONS).
+ * Failures are logged at error level (the API error alarm counts them) and thrown: a caller that must not fail because
+ * of Discord (Login, Visita) catches and moves on.
  * Mentions are never parsed: an `@everyone` typed by a visitor stays text. The webhook URL is a secret, so it is never
  * logged, not even on failure. Without a URL (local dev) the embed is only logged; production config requires the URLs.
  */
-export async function postToDiscord(webhookUrl: string | undefined, embed: DiscordEmbed): Promise<void> {
+export async function postToDiscord(webhookUrl: string | undefined, embed: DiscordEmbed, { silent = false } = {}) {
   if (!webhookUrl) {
     logger.log(`No webhook configured, not sent: ${JSON.stringify(embed)}`);
     return;
@@ -24,7 +32,7 @@ export async function postToDiscord(webhookUrl: string | undefined, embed: Disco
     const response = await fetch(webhookUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ embeds: [embed], allowed_mentions: { parse: [] } }),
+      body: JSON.stringify({ embeds: [embed], allowed_mentions: { parse: [] }, ...(silent && { flags: 4096 }) }),
       signal: AbortSignal.timeout(2000),
     });
     if (response.ok) return;

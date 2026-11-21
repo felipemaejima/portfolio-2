@@ -27,9 +27,10 @@ const schema = z
     S3_BUCKET: z.string().min(1).optional(),
     /** Base of public upload URLs; defaults to the API serving them itself (local driver). */
     UPLOADS_PUBLIC_URL: z.url().optional(),
-    /** Secret, read from SSM at boot in production (ssm-secrets.ts). Unset outside production: messages are only
-     * logged. */
+    /** Discord webhooks: secrets, read from SSM at boot in production (ssm-secrets.ts). Unset outside production:
+     * messages are only logged. #contato: Mensagens de contato; #alertas: Logins. */
     DISCORD_CONTACT_WEBHOOK_URL: z.url().optional(),
+    DISCORD_ALERTS_WEBHOOK_URL: z.url().optional(),
   })
   .refine((c) => c.JWT_ACCESS_SECRET !== c.JWT_REFRESH_SECRET, {
     message: 'must differ from JWT_ACCESS_SECRET',
@@ -39,9 +40,11 @@ const schema = z
     message: 'S3_BUCKET and UPLOADS_PUBLIC_URL are required with STORAGE_DRIVER=s3',
     path: ['STORAGE_DRIVER'],
   })
-  .refine((c) => c.NODE_ENV !== 'production' || c.DISCORD_CONTACT_WEBHOOK_URL, {
-    message: 'required in production',
-    path: ['DISCORD_CONTACT_WEBHOOK_URL'],
+  .superRefine((c, ctx) => {
+    if (c.NODE_ENV !== 'production') return;
+    for (const key of ['DISCORD_CONTACT_WEBHOOK_URL', 'DISCORD_ALERTS_WEBHOOK_URL'] as const) {
+      if (!c[key]) ctx.addIssue({ code: 'custom', message: 'required in production', path: [key] });
+    }
   })
   .transform((c) => ({ ...c, UPLOADS_PUBLIC_URL: c.UPLOADS_PUBLIC_URL ?? `${c.PUBLIC_URL}/uploads` }));
 

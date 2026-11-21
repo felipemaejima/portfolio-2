@@ -1,6 +1,7 @@
+import { Logger } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import request from 'supertest';
-import { ADMIN, createAdmin, createApp, resetDb } from './helpers';
+import { ADMIN, createAdmin, createApp, fakeWebhook, resetDb } from './helpers';
 
 describe('auth', () => {
   let app: NestExpressApplication;
@@ -117,5 +118,73 @@ describe('auth', () => {
     } finally {
       await behindEdge.close();
     }
+  });
+});
+
+describe('login alert', () => {
+  let app: NestExpressApplication;
+  let discord: Awaited<ReturnType<typeof fakeWebhook>>;
+  const login = (body = ADMIN) =>
+    request(app.getHttpServer())
+      .post('/api/auth/login')
+      .set('X-Viewer-Ip', '203.0.113.7')
+      .set('User-Agent', `Firefox/${'x'.repeat(500)}`)
+      .send(body);
+
+  beforeAll(async () => {
+    discord = await fakeWebhook();
+    app = await createApp({ DISCORD_ALERTS_WEBHOOK_URL: discord.url, CLIENT_IP_HEADER: 'x-viewer-ip' });
+  });
+  afterAll(async () => {
+    await app.close();
+    await discord.close();
+  });
+  beforeEach(async () => {
+    await resetDb(app);
+    await createAdmin(app);
+    discord.received.length = 0;
+    discord.replyWith(204);
+  });
+  afterEach(() => jest.restoreAllMocks());
+
+  it('posts a silent message to #alertas with the IP, the browser (cut) and the time', async () => {
+    await login().expect(200);
+
+    expect(discord.received).toEqual([
+      {
+        flags: 4096, // SUPPRESS_NOTIFICATIONS: shows in the channel without a notification
+        allowed_mentions: { parse: [] },
+        embeds: [
+          expect.objectContaining({
+            timestamp: expect.stringMatching(/^\d{4}-\d\d-\d\dT/),
+            fields: [
+              expect.objectContaining({ value: '203.0.113.7' }),
+              expect.objectContaining({ value: `Firefox/${'x'.repeat(192)}…` }),
+            ],
+          }),
+        ],
+      },
+    ]);
+  });
+
+  it('says nothing on a wrong password or a session refresh', async () => {
+    await login({ ...ADMIN, password: 'wrong-password' }).expect(401);
+    const cookie = ([] as string[]).concat((await login().expect(200)).headers['set-cookie'] ?? [])[0];
+    discord.received.length = 0;
+
+    await request(app.getHttpServer()).post('/api/auth/refresh').set('Cookie', cookie.split(';')[0]).expect(200);
+    expect(discord.received).toEqual([]);
+  });
+
+  it('logs the admin in anyway when Discord fails or is slow, logging an error without the webhook URL', async () => {
+    const errors = jest.spyOn(Logger.prototype, 'error');
+
+    discord.replyWith(500);
+    await login().expect(200);
+    discord.replyWith('hang'); // gives up after ~2 s
+    await login().expect(200);
+
+    expect(errors).toHaveBeenCalledTimes(2);
+    expect(JSON.stringify(errors.mock.calls)).not.toContain(discord.url);
   });
 });
