@@ -1,16 +1,68 @@
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import request from 'supertest';
-import { createApp } from './helpers';
+import { createApp, fakeWebhook, resetDb } from './helpers';
 
 describe('contact', () => {
   let app: NestExpressApplication;
-  beforeAll(async () => (app = await createApp()));
-  afterAll(() => app.close());
+  let discord: Awaited<ReturnType<typeof fakeWebhook>>;
+  const send = (body: object) => request(app.getHttpServer()).post('/api/contact').send(body);
+  const valid = { name: 'Ana', email: 'ana@test.dev', message: 'Oi @everyone, vi seu portfolio' };
 
-  it('validates the message, then reports the channel as not implemented', async () => {
-    const http = request(app.getHttpServer());
-    await http.post('/api/contact').send({ name: 'Ana', email: 'not-an-email', message: 'Oi' }).expect(400);
-    await http.post('/api/contact').send({ name: 'Ana', email: 'ana@test.dev', message: 'Oi' }).expect(501);
+  beforeAll(async () => {
+    discord = await fakeWebhook();
+    app = await createApp({ DISCORD_CONTACT_WEBHOOK_URL: discord.url });
+  });
+  afterAll(async () => {
+    await app.close();
+    await discord.close();
+  });
+  beforeEach(async () => {
+    await resetDb(app); // the 3-per-minute limit counts in the database
+    discord.received.length = 0;
+    discord.replyWith(204);
+  });
+
+  it('delivers the message to #contato as plain text in an embed, with mentions disabled', async () => {
+    await send(valid).expect(204);
+
+    expect(discord.received).toEqual([
+      {
+        allowed_mentions: { parse: [] },
+        embeds: [
+          expect.objectContaining({
+            description: 'Oi @everyone, vi seu portfolio',
+            fields: [expect.objectContaining({ value: 'Ana' }), expect.objectContaining({ value: 'ana@test.dev' })],
+          }),
+        ],
+      },
+    ]);
+  });
+
+  it('answers an error, never a false success, when Discord fails or takes too long', async () => {
+    discord.replyWith(500);
+    await send(valid).expect(502);
+
+    discord.replyWith('hang'); // gives up after ~2 s: the Lambda is billed while it waits
+    await send(valid).expect(502);
+  });
+
+  it('answers success to a filled honeypot without sending anything', async () => {
+    await send({ ...valid, honeypot: 'https://spam.example' }).expect(204);
+    expect(discord.received).toEqual([]);
+  });
+
+  it('rejects an invalid e-mail and blank text', async () => {
+    await send({ ...valid, email: 'not-an-email' }).expect(400);
+    await send({ ...valid, name: '   ' }).expect(400); // Discord rejects blank embed fields
+    await send({ ...valid, message: ' \n ' }).expect(400);
+  });
+
+  it('takes up to 4000 characters, counted as the form counts them', async () => {
+    await send({ ...valid, message: 'a'.repeat(4001) }).expect(400);
+    // 4002 UTF-16 units, as the textarea's maxLength counts them
+    await send({ ...valid, message: '❤️'.repeat(2001) }).expect(400);
+    await send({ ...valid, message: 'a'.repeat(4000) }).expect(204);
+    expect(discord.received).toHaveLength(1);
   });
 });
 

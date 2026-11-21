@@ -18,7 +18,7 @@ Uma API em NestJS + Prisma + PostgreSQL que é a fonte única do conteúdo do po
 - Um **site público** que lê todo o conteúdo visível por uma API, em português ou inglês, com filtros na listagem de projetos.
 - Um **painel administrativo** protegido, em que o único dono do portfolio edita cada seção (perfil, links sociais, habilidades, projetos, experiência, formação, serviços), ordena itens, oculta itens sem apagar e envia imagens.
 - Um **CV em PDF gerado sob demanda** a partir dos mesmos dados, em PT ou EN, sempre em sincronia com o site.
-- A **estrutura do contato** preparada (modelo, contrato e proteção), mas sem ação ainda.
+- O **contato**: cada Mensagem de contato enviada pelo formulário chega ao canal `#contato` do Discord do dono.
 - Todo o ambiente (dev, testes, build de produção) roda em Docker, operado por um Makefile, sem exigir Node, pnpm ou Postgres instalados localmente. O repositório é um monorepo pnpm, com a API em `apps/api` e espaço para o futuro app web.
 
 ## User Stories
@@ -51,7 +51,7 @@ Uma API em NestJS + Prisma + PostgreSQL que é a fonte única do conteúdo do po
 24. As a visitor, I want to download the CV as a PDF in the selected language, so that I can keep or share it.
 25. As a visitor, I want the CV to reflect the current site content, so that it is never outdated.
 26. As a visitor, I want my browser to reuse a previously downloaded CV when nothing changed, so that downloads are fast.
-27. As a visitor, I want to see a contact form, so that I know a message channel will exist (the backend answers "not implemented" for now).
+27. As a visitor, I want to send a message through the contact form and be told whether it was delivered, so that I know the owner got it.
 28. As a visitor, I never want to see hidden (non-visible) items, so that drafts stay private.
 
 ### Admin — autenticação e conta
@@ -93,10 +93,10 @@ Uma API em NestJS + Prisma + PostgreSQL que é a fonte única do conteúdo do po
 57. As the admin, I want deleting media that is still referenced to be refused, so that I never break a page.
 58. As the operator, I want the storage backend swappable by configuration (local disk now, S3-compatible later) without migrating data, so that hosting can change cheaply.
 
-### Contato (estrutura)
+### Contato
 
-59. As the operator, I want the contact message model already migrated, so that implementing the channel later needs no schema redesign.
-60. As the operator, I want the contact endpoint to already validate and rate-limit input before answering "not implemented", so that the contract and protection are in place from day one.
+59. As the owner, I want each Mensagem de contato in my `#contato` Discord channel with the visitor's name, e-mail and message, so that I can answer by e-mail.
+60. As the owner, I want the contact endpoint to validate and rate-limit input and to drop bots silently (honeypot), so that spam doesn't reach me.
 
 ### Operação / ambiente
 
@@ -133,7 +133,7 @@ Uma API em NestJS + Prisma + PostgreSQL que é a fonte única do conteúdo do po
 - **Media**: upload, listagem, deleção; depende de Storage.
 - **Storage**: interface única com driver local; driver escolhido por env.
 - **CV**: gera PDF sob demanda a partir dos mesmos serviços de leitura pública.
-- **Contact**: DTO + endpoint 501.
+- **Contact**: DTO + envio ao Discord por `postToDiscord` (`common/discord.ts`), reaproveitado pelos avisos de Login e Visita.
 - **I18n (lógica pura)**: resolução de `LocalizedText` para um locale com fallback (helper comum).
 
 ### Autenticação (stateless)
@@ -171,7 +171,7 @@ Todas as coleções têm `id`, `position` (int, ordenação manual), `visible` (
 - **Education**: title `LT`, institution, kind (`DEGREE|CERTIFICATION|COURSE`), startDate?, endDate?, datePrecision.
 - **Service**: title `LT`, description `LT`.
 - **Media**: key (única, gerada), mime, size, createdAt. Referências a Media com `onDelete: Restrict`.
-- **ContactMessage**: name, email, message, createdAt, readAt?.
+- **ContactMessage**: name, email, message, createdAt, readAt?. Sem uso: as mensagens vão para o Discord, não para o banco.
 - Datas armazenadas como `DATE` (dia 1 / mês 1 quando a precisão é menor); formatação é responsabilidade do front.
 
 ### Storage
@@ -197,7 +197,7 @@ Público (sem auth):
 - `GET /portfolio?lang=` — agregado: perfil, links sociais, categorias com skills, projetos featured, experiências, formação, serviços. Só itens visíveis, ordenados por `position`.
 - `GET /projects?lang=&tags=&tagsMode=any|all&featured=&q=&sort=position|-createdAt&page=&pageSize=`.
 - `GET /cv?lang=`.
-- `POST /contact` — valida `{ name, email, message }` com limites de tamanho, passa pelo throttle e responde **501 Not Implemented**.
+- `POST /contact` — valida `{ name, email, message, honeypot? }`, passa pelo throttle (3 por minuto por IP), envia ao `#contato` do Discord e responde **204**; **502** se o Discord falhar (ver Contato).
 
 Auth:
 - `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `PATCH /admin/account/password`.
@@ -206,6 +206,14 @@ Admin (`/admin/*`, JWT obrigatório):
 - `GET|PUT /admin/profile`.
 - Para cada coleção (`social-links`, `skill-categories`, `skills`, `projects`, `experiences`, `education`, `services`): `GET` (lista, com filtros), `GET /:id`, `POST`, `PATCH /:id`, `DELETE /:id`, `PATCH /reorder` (recebe `[ids]`, reescreve `position` em transação).
 - `POST /admin/uploads`, `GET /admin/media`, `DELETE /admin/media/:id`.
+
+### Contato (Discord)
+- **Webhook** do `#contato` em `DISCORD_CONTACT_WEBHOOK_URL`. Em produção é obrigatório e vem do SSM no boot (`discord-contact-webhook`, ver `infra.md`): nunca em variável de ambiente da Lambda, no state ou nos logs. Fora de produção é opcional; sem ele, a mensagem só vai para o log (ambiente local sem webhook real).
+- **Formato**: um embed com título "Mensagem de contato", campos Nome e E-mail e a mensagem na descrição, como texto puro (nunca HTML). Menções desligadas (`allowed_mentions: { parse: [] }`): `@everyone` do formulário não notifica ninguém. O markdown digitado pelo visitante é renderizado pelo Discord; escapá-lo poderia passar dos 4096 caracteres da descrição, e links mascarados já passam pelo aviso de link externo do Discord.
+- **Limite**: mensagem de até **4000** caracteres, contados em unidades UTF-16 nos dois lados (o `maxLength` do formulário conta assim; o `MaxLength` do class-validator contaria "❤️" como 1): cabe inteira na descrição do embed, sem código de corte. Nome e mensagem só com espaços → 400 (o Discord recusa campos em branco).
+- **Honeypot**: campo `honeypot`, invisível e fora da ordem de tabulação no formulário, com um nome que nenhum preenchimento automático reconhece (uma mensagem real nunca pode ser descartada). Preenchido → 204 sem envio.
+- **Falha**: erro do Discord ou demora acima de ~2 s (a Lambda é cobrada enquanto espera) → **502**, e o site mostra erro, nunca um sucesso falso. O log registra o status e o início da resposta de erro do Discord (que aponta o campo recusado), ou o tipo do erro; nunca a URL.
+- **Smoke de produção**: não chama `POST /contact`, que enviaria uma mensagem real.
 
 ### Filtros e paginação
 - **Projects**: `tags` (lista), `tagsMode` (`any` padrão, `all`), `featured`, `q`, `sort`. Tags comparadas em minúsculas; exibição preserva a grafia original.
@@ -241,14 +249,14 @@ Admin (`/admin/*`, JWT obrigatório):
   - Reorder: aplica ordem nova; ids inválidos não alteram nada (transação).
   - Media: upload com extensão falsa (magic bytes inválidos) → 400; excesso de tamanho → 413; delete de mídia referenciada → 409; `unused=true` lista só órfãs.
   - CV: responde `application/pdf`; segundo request com `If-None-Match` → 304; mudança de conteúdo muda o ETag.
-  - Contact: payload inválido → 400; válido → 501.
+  - Contact (webhook falso, um servidor HTTP local): válido com `@everyone` → 204 e um embed com menções desligadas; inválido, em branco ou acima de 4000 (inclusive com emoji) → 400; Discord com erro ou sem resposta → 502; honeypot preenchido → 204 sem envio.
   - Swagger: `/api/docs-json` servido fora de produção e indisponível com env de produção.
 - **Unitário**: nenhum — a resolução de `LocalizedText` é uma linha e o fallback já é coberto pelo e2e de i18n.
 - **Prior art**: nenhum — repositório novo; estes testes estabelecem o padrão.
 
 ## Out of Scope
 
-- Implementação do canal de contato (envio de e-mail, persistência de mensagens, notificações, captcha).
+- Contato além do Discord: e-mail, persistência das mensagens, captcha.
 - Frontend público e painel administrativo (UI).
 - Multi-tenant / múltiplos usuários, signup público.
 - MFA/TOTP, lockout por conta, log de auditoria.

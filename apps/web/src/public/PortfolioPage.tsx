@@ -1,12 +1,12 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router';
-import { ApiError, api } from '../lib/api';
 import { formatPeriod, useLang } from '../lib/i18n';
 import { visibleSections } from '../lib/sections';
 import { paragraphs, splitItems } from '../lib/text';
 import type { Portfolio } from '../lib/types';
 import { useFetch } from '../lib/use-fetch';
 import { useReveal } from '../lib/use-reveal';
+import { ContactForm } from './ContactForm';
 import { ProjectCard } from './ProjectCard';
 import { SiteHeader } from './SiteHeader';
 
@@ -265,50 +265,6 @@ function Items({ text }: { text: string }) {
       {item}
     </span>
   ));
-}
-
-function ContactForm() {
-  const { t } = useLang();
-  const [status, setStatus] = useState<{ sending: boolean; message?: string; error?: boolean }>({ sending: false });
-
-  const submit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const form = event.currentTarget;
-    setStatus({ sending: true });
-    try {
-      await api('/contact', { method: 'POST', json: Object.fromEntries(new FormData(form)) });
-      form.reset();
-      setStatus({ sending: false, message: t.messageSent });
-    } catch (error) {
-      // The delivery channel isn't decided yet: the API validates the message, then answers 501.
-      const message = error instanceof ApiError && error.status !== 501 ? error.message : t.contactUnavailable;
-      setStatus({ sending: false, message, error: true });
-    }
-  };
-
-  return (
-    <form className="form" onSubmit={(event) => void submit(event)}>
-      <label>
-        {t.name}
-        <input name="name" required maxLength={120} />
-      </label>
-      <label>
-        {t.email}
-        <input name="email" type="email" required maxLength={254} />
-      </label>
-      <label>
-        {t.message}
-        <textarea name="message" required maxLength={5000} rows={4} />
-      </label>
-      <button className="button button-accent" type="submit" disabled={status.sending} aria-busy={status.sending}>
-        {status.sending ? t.sending : t.send}
-      </button>
-      {/* Always there: a live region announces changes to its text, not its arrival. */}
-      <p className={status.error ? 'form-error' : 'form-message'} role="status">
-        {status.message}
-      </p>
-    </form>
-  );
 }
 
 /** Icon only, where the Clipboard API exists (secure contexts); a check replaces the icon while `copied`. */

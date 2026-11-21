@@ -1,6 +1,8 @@
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
 import * as argon2 from 'argon2';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { CONFIG, loadConfig, type Config } from '../src/config/config';
@@ -40,3 +42,27 @@ export async function adminToken(app: NestExpressApplication) {
 }
 
 export const lt = (pt: string, en?: string) => ({ pt, ...(en && { en }) });
+
+/** Stands in for a Discord webhook: records every JSON body it gets and answers `status`, or never answers ('hang'). */
+export async function fakeWebhook() {
+  const received: unknown[] = [];
+  let reply: number | 'hang' = 204;
+  const server = createServer((req, res) => {
+    let body = '';
+    req.on('data', (chunk) => (body += chunk));
+    req.on('end', () => {
+      received.push(JSON.parse(body));
+      if (reply !== 'hang') res.writeHead(reply).end();
+    });
+  });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  return {
+    url: `http://127.0.0.1:${(server.address() as AddressInfo).port}/webhook`,
+    received,
+    replyWith: (status: number | 'hang') => (reply = status),
+    close: () => {
+      server.closeAllConnections();
+      return new Promise((resolve) => server.close(resolve));
+    },
+  };
+}
