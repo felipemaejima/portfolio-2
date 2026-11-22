@@ -102,6 +102,18 @@ describe('auth', () => {
     }
   });
 
+  it('rate-limits password changes like login (a stolen access token cannot guess passwords without limit)', async () => {
+    const { body } = await login().expect(200);
+    const attempt = () =>
+      http
+        .patch('/api/admin/account/password')
+        .set('X-Authorization', `Bearer ${body.accessToken}`)
+        .send({ currentPassword: 'wrong-password', newPassword: 'another-long-password' });
+
+    for (let i = 0; i < 5; i++) await attempt().expect(403);
+    await attempt().expect(429);
+  });
+
   it('keys the rate limit on the IP set by the trusted edge, ignoring client-forged X-Forwarded-For', async () => {
     const behindEdge = await createApp({ CLIENT_IP_HEADER: 'x-viewer-ip' });
     try {
@@ -147,7 +159,7 @@ describe('login alert', () => {
   });
   afterEach(() => jest.restoreAllMocks());
 
-  it('posts a silent message to #alertas with the IP, the browser (cut) and the time', async () => {
+  it('posts a silent message to #alertas with the method, the IP, the browser (cut) and the time', async () => {
     await login().expect(200);
 
     expect(discord.received).toEqual([
@@ -158,6 +170,7 @@ describe('login alert', () => {
           expect.objectContaining({
             timestamp: expect.stringMatching(/^\d{4}-\d\d-\d\dT/),
             fields: [
+              expect.objectContaining({ name: 'Método', value: 'Senha' }),
               expect.objectContaining({ value: '203.0.113.7' }),
               expect.objectContaining({ value: `Firefox/${'x'.repeat(192)}…` }),
             ],

@@ -7,6 +7,7 @@ import { cut, postToDiscord } from '../common/discord';
 import type { CookieOptions, Request, Response } from 'express';
 import { Public } from '../common/public.decorator';
 import { CONFIG, type Config } from '../config/config';
+import type { Admin } from '../generated/prisma/client';
 import { AccessTokenDto, ChangePasswordDto, LoginDto } from './auth.dto';
 import { AdminId } from './auth.guard';
 import { AuthService } from './auth.service';
@@ -31,10 +32,7 @@ export class AuthController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ): Promise<AccessTokenDto> {
-    const { accessToken, refreshToken } = await this.auth.login(dto.email, dto.password);
-    res.cookie(REFRESH_COOKIE, refreshToken, this.cookieOptions());
-    await this.announceLogin(req);
-    return { accessToken };
+    return this.openSession(await this.auth.findByCredentials(dto.email, dto.password), 'Senha', req, res);
   }
 
   @Public()
@@ -60,6 +58,9 @@ export class AuthController {
 
   /** Also ends every session. */
   @ApiSecurity(ADMIN_AUTH)
+  // Rate-limited like login: a stolen access token must not guess passwords without limit.
+  @UseGuards(ClientIpThrottlerGuard)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Patch('admin/account/password')
   @HttpCode(204)
   async changePassword(
@@ -71,13 +72,25 @@ export class AuthController {
     res.clearCookie(REFRESH_COOKIE, { ...this.cookieOptions(), maxAge: undefined });
   }
 
+  /**
+   * The one place a session opens, whatever proved who the admin is (`method`, as the Login alert shows it): issues the
+   * tokens, sets the refresh cookie and announces the Login.
+   */
+  private async openSession(admin: Admin, method: string, req: Request, res: Response): Promise<AccessTokenDto> {
+    const { accessToken, refreshToken } = await this.auth.issueTokens(admin);
+    res.cookie(REFRESH_COOKIE, refreshToken, this.cookieOptions());
+    await this.announceLogin(method, req);
+    return { accessToken };
+  }
+
   /** A Login that wasn't the owner is an incident: a silent message in #alertas. Discord failing never blocks it. */
-  private announceLogin(req: Request) {
+  private announceLogin(method: string, req: Request) {
     return postToDiscord(
       this.config.DISCORD_ALERTS_WEBHOOK_URL,
       {
         title: 'Login no admin',
         fields: [
+          { name: 'Método', value: method, inline: true },
           { name: 'IP', value: clientIp(req, this.config.CLIENT_IP_HEADER), inline: true },
           { name: 'Navegador', value: cut(req.header('user-agent') || 'desconhecido', 200) },
         ],
