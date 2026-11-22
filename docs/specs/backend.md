@@ -160,7 +160,7 @@ Decisões no ADR 0002; fontes em `docs/research/oauth-google.md`.
 - **Avisos** no `#alertas`, silenciosos e no mesmo formato do aviso de Login: "Conta Google vinculada" e "Conta Google desvinculada", com o e-mail da conta, o IP e o navegador. Vincular é o jeito de um invasor manter acesso.
 - **Incidente**: aviso de vínculo que não foi o dono → desvincular (encerra todas as sessões) e depois trocar a senha. Trocar a senha não desvincula.
 - **Logs**: falhas que quem chama consegue causar vão como `warn`, nunca `error` (não disparam Alerta). A query string da volta nunca é logada (leva o code); da falha na troca só vão o nome e o código do erro. Falha no discovery ao iniciar é `error`.
-- **Config**: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` e `OAUTH_STATE_SECRET` (mínimo de 32 caracteres, diferente dos segredos JWT). Opcionais por enquanto; sem os três, o início responde 302 para `/admin?google=erro`.
+- **Config**: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` e `OAUTH_STATE_SECRET` (mínimo de 32 caracteres, diferente dos segredos JWT). Obrigatórios em produção (o client ID vem do Terraform; os dois segredos, do SSM no boot: ver `infra.md`); fora dela, sem os três, o início responde 302 para `/admin?google=erro`.
 
 ### Segurança transversal
 - Helmet; CORS com allowlist (em prod, front e API no mesmo site via reverse proxy em `/api`, então CORS só importa em dev).

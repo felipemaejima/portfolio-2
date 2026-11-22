@@ -5,6 +5,9 @@ github_repository = "felipemaejima/portfolio-2"
 github_owner_id      = 0
 github_repository_id = 0
 alert_email       = "you@example.com"
+# Production Google OAuth client (Google Cloud console > Clients), redirect URI https://<domain>/api/auth/google/callback.
+# Public; the client secret goes to SSM with `make google-secrets`, never here.
+google_client_id = "000000000000-xxxxxxxx.apps.googleusercontent.com"
 
 # Only if the apply fails with "Limit exceeded on dimensional spend monitor creation" (see infra/README.md):
 # existing_anomaly_monitor_arn = "arn:aws:ce::<account>:anomalymonitor/<id>"

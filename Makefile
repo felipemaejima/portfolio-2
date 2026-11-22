@@ -28,7 +28,7 @@ TF_BOOT     := $(CLOUD) hashicorp/terraform:1.16.4 -chdir=infra/bootstrap
 .DEFAULT_GOAL := help
 
 .PHONY: help up down logs sh install migrate migration seed studio test lint openapi build test-web reset-db \
-        aws-configure aws-login tf-bootstrap tf-init tf-plan tf-apply aws tf tf-fmt ci-lint test-infra db-secrets discord-secrets seed-prod api-publish plan-subscribe api-restart api-enable smoke
+        aws-configure aws-login tf-bootstrap tf-init tf-plan tf-apply aws tf tf-fmt ci-lint test-infra db-secrets discord-secrets google-secrets seed-prod api-publish plan-subscribe api-restart api-enable smoke
 
 help: ## list available commands
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "} {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
@@ -145,6 +145,14 @@ discord-secrets: $(HOME)/.aws ## store the Discord webhook URLs in SSM (typed, n
 	    aws ssm put-parameter --name $(SSM_PREFIX)/$$1 --type SecureString --overwrite --value "$$2" >/dev/null && \
 	    echo "Stored $(SSM_PREFIX)/$$1"; } && \
 	  put discord-alerts-webhook "$$ALERTS" && put discord-contact-webhook "$$CONTACT" && put discord-visits-webhook "$$VISITS"'
+
+google-secrets: $(HOME)/.aws ## store the production Google OAuth client secret in SSM (typed, never echoed or written to disk)
+	@read -rsp "Google client secret (production OAuth client): " GOOGLE_SECRET && echo && \
+	[ -n "$$GOOGLE_SECRET" ] || { echo "Nothing stored"; exit 1; } && \
+	export GOOGLE_SECRET && \
+	$(CLOUD) -e GOOGLE_SECRET --entrypoint sh amazon/aws-cli:2.37.4 -c '\
+	  aws ssm put-parameter --name $(SSM_PREFIX)/google-client-secret --type SecureString --overwrite --value "$$GOOGLE_SECRET" \
+	    >/dev/null && echo "Stored $(SSM_PREFIX)/google-client-secret"'
 
 api-publish: $(HOME)/.aws ## build the arm64 image and push it to ECR (first deploy / manual fallback; CI does this normally)
 	docker run --privileged --rm tonistiigi/binfmt:qemu-v10.2.3 --install arm64 >/dev/null

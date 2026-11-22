@@ -22,6 +22,8 @@ describe('loadSecretsFromSsm', () => {
       '/portfolio/prod/discord-contact-webhook': 'https://discord.test/contact',
       '/portfolio/prod/discord-alerts-webhook': 'https://discord.test/alerts',
       '/portfolio/prod/discord-visits-webhook': 'https://discord.test/visits',
+      '/portfolio/prod/google-client-secret': 'google',
+      '/portfolio/prod/oauth-state-secret': 'oauth-state',
     });
 
     await loadSecretsFromSsm(env, ssm as never);
@@ -33,6 +35,8 @@ describe('loadSecretsFromSsm', () => {
       DISCORD_CONTACT_WEBHOOK_URL: 'https://discord.test/contact',
       DISCORD_ALERTS_WEBHOOK_URL: 'https://discord.test/alerts',
       DISCORD_VISITS_WEBHOOK_URL: 'https://discord.test/visits',
+      GOOGLE_CLIENT_SECRET: 'google',
+      OAUTH_STATE_SECRET: 'oauth-state',
     });
     expect(ssm.send.mock.calls[0][0].input.WithDecryption).toBe(true);
   });

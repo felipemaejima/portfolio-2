@@ -47,3 +47,8 @@ variable "monthly_budget_usd" {
   type        = number
   default     = 11
 }
+
+variable "google_client_id" {
+  description = "Client ID of the production Google OAuth client (Login com Google, ADR 0002); its secret goes to SSM via make google-secrets"
+  type        = string
+}
