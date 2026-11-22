@@ -14,17 +14,19 @@ export function AdminApp() {
   const [session, setSession] = useState<'checking' | 'in' | 'out'>('checking');
   const [notice, setNotice] = useState<string>();
 
+  // However the session opens (restored on load or a Login), this browser never counts as a Visita: marked right away,
+  // before the panel renders (an effect would run only after it).
+  const sessionOpened = () => {
+    markAdminBrowser();
+    setSession('in');
+  };
+
   useEffect(() => {
-    refreshSession().then((ok) => setSession(ok ? 'in' : 'out'), () => setSession('out'));
+    refreshSession().then((ok) => (ok ? sessionOpened() : setSession('out')), () => setSession('out'));
   }, []);
 
-  // However the session opened (restored on load or a Login), this browser never counts as a Visita.
-  useEffect(() => {
-    if (session === 'in') markAdminBrowser();
-  }, [session]);
-
   if (session === 'checking') return <p className="status loading">Carregando…</p>;
-  if (session === 'out') return <LoginPage notice={notice} onLoggedIn={() => setSession('in')} />;
+  if (session === 'out') return <LoginPage notice={notice} onLoggedIn={sessionOpened} />;
 
   const endSession = (message?: string) => {
     setNotice(message);
