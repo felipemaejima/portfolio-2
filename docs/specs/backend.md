@@ -151,16 +151,21 @@ Uma API em NestJS + Prisma + PostgreSQL que é a fonte única do conteúdo do po
 Decisões no ADR 0002; fontes em `docs/research/oauth-google.md`.
 - OpenID Connect, Authorization Code no servidor, pela `openid-client` (ESM, importada no primeiro uso). O pedido leva `scope=openid email`, `prompt=select_account`, `state`, `nonce` e PKCE `S256`, sem `access_type=offline`. Discovery lazy, uma vez por instância, em memória (timeout de 5 s por requisição ao Google). Nenhum token do Google é guardado.
 - **Provedor Google** (`auth/google.provider.ts`): o único ponto que fala com o Google e o único substituído nos testes. Monta a URL de autorização e troca os parâmetros da volta por `{ subject, email }`, com `iss`, `aud`, `exp` e `nonce` validados. A redirect URI é `PUBLIC_URL` + `/api/auth/google/callback`, nunca o header `Host` (atrás do CloudFront ele é o da Lambda). Em dev, `PUBLIC_URL` é a origem do Vite (`http://localhost:5173`).
-- **Cookie do fluxo pendente** `google_oauth` (`auth/pending-flow-cookie.ts`): intenção (`login`), `state`, `nonce` e `code_verifier`, cifrados com AES-256-GCM (chave = SHA-256 de `OAUTH_STATE_SECRET`), com expiração de 10 min embutida. `HttpOnly; Secure; SameSite=Lax; Path=/api/auth/google/callback; Max-Age=600`: precisa ser `Lax`, porque um cookie `Strict` não volta na navegação vinda do Google.
+- **Cookie do fluxo pendente** `google_oauth` (`auth/pending-flow-cookie.ts`): intenção (`login`, ou `vincular` com o `adminId` e o `tokenVersion` de quem começou), `state`, `nonce` e `code_verifier`, cifrados com AES-256-GCM (chave = SHA-256 de `OAUTH_STATE_SECRET`), com expiração de 10 min embutida. `HttpOnly; Secure; SameSite=Lax; Path=/api/auth/google/callback; Max-Age=600`: precisa ser `Lax`, porque um cookie `Strict` não volta na navegação vinda do Google.
+- O `state` começa com a intenção (`login.` ou `vincular.`): um vínculo cujo cookie já se foi (expirado no Google) volta mesmo assim para a página Conta, com `erro`.
 - **Uso único**: a volta apaga o cookie em qualquer resultado, e uma cópia reenviada dentro dos 10 min é recusada por um contador do rate limit (`RateLimit`, chave `google-flow:<state>`, limite 1).
 - **Volta** (`/admin?google=<código>` nas falhas, sempre caminhos fixos): cookie ausente, alterado, de outra chave, expirado ou já usado → `erro`; `error=access_denied` → `cancelado`; outro `error` → `erro`; `state` diferente do cookie → `erro`; falha na troca → `erro`; `sub` sem Conta vinculada → `nao-vinculada`; sucesso → atualiza o e-mail exibido, abre a sessão pelo ponto único e responde 302 para `/admin`, onde o painel restaura a sessão pelo refresh cookie.
+- **Vínculo** (só de dentro do painel, nunca por e-mail igual): `POST /admin/account/google` confirma a senha atual (403; 409 se já há Conta vinculada Google), grava o cookie com a intenção `vincular` e devolve a URL do Google. Na volta, cancelar → `/admin/conta`; qualquer outra falha, `tokenVersion` mudado no intervalo (logout ou troca de senha: a revogação vence) ou um dos lados já vinculado (as chaves únicas) → `/admin/conta?google=erro`; sucesso → cria a Conta vinculada num único `update` do Admin filtrado por `tokenVersion`, avisa e responde 302 para `/admin/conta?google=vinculada`.
+- **Desvínculo** (`DELETE`, sem senha, para cortar rápido um Login suspeito): apaga a Conta vinculada e faz `tokenVersion++` na mesma transação, limpa o refresh cookie e avisa.
+- **Avisos** no `#alertas`, silenciosos e no mesmo formato do aviso de Login: "Conta Google vinculada" e "Conta Google desvinculada", com o e-mail da conta, o IP e o navegador. Vincular é o jeito de um invasor manter acesso.
+- **Incidente**: aviso de vínculo que não foi o dono → desvincular (encerra todas as sessões) e depois trocar a senha. Trocar a senha não desvincula.
 - **Logs**: falhas que quem chama consegue causar vão como `warn`, nunca `error` (não disparam Alerta). A query string da volta nunca é logada (leva o code); da falha na troca só vão o nome e o código do erro. Falha no discovery ao iniciar é `error`.
 - **Config**: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` e `OAUTH_STATE_SECRET` (mínimo de 32 caracteres, diferente dos segredos JWT). Opcionais por enquanto; sem os três, o início responde 302 para `/admin?google=erro`.
 
 ### Segurança transversal
 - Helmet; CORS com allowlist (em prod, front e API no mesmo site via reverse proxy em `/api`, então CORS só importa em dev).
 - `ValidationPipe` global com `whitelist`, `forbidNonWhitelisted`, `transform`.
-- `@nestjs/throttler`: limites estritos por IP em login, refresh, troca de senha (5 por minuto, como o login: um access token roubado não testa senhas sem limite), início e volta do Login pelo Google (5 por minuto cada), `POST /contact` e `GET /cv`, com contadores no Postgres (compartilhados entre instâncias). O limite global por IP fica no WAF (ver `infra.md`).
+- `@nestjs/throttler`: limites estritos por IP em login, refresh, troca de senha (5 por minuto, como o login: um access token roubado não testa senhas sem limite), início e volta do Login pelo Google e início do vínculo (5 por minuto cada), `POST /contact` e `GET /cv`, com contadores no Postgres (compartilhados entre instâncias). O limite global por IP fica no WAF (ver `infra.md`).
 - Limites de tamanho de corpo e de upload.
 - HTTPS terminado na borda (CloudFront). O IP real do cliente vem de um header gravado pela borda (`CLIENT_IP_HEADER`), nunca do `X-Forwarded-For`, cujas entradas o cliente pode forjar.
 - Logs estruturados do Nest; sem tabela de auditoria nem lockout por conta.
@@ -215,7 +220,8 @@ Público (sem auth):
 
 Auth:
 - `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `PATCH /admin/account/password`.
-- `GET /auth/google` (302 para o Google, ou para `/admin?google=erro` sem credenciais) e `GET /auth/google/callback` (302 para `/admin` ou `/admin?google=<código>`); ver Login pelo Google.
+- `GET /auth/google` (302 para o Google, ou para `/admin?google=erro` sem credenciais) e `GET /auth/google/callback` (302 para `/admin`, `/admin?google=<código>` ou, num vínculo, `/admin/conta?google=vinculada|erro`); ver Login pelo Google.
+- `GET /admin/account/google` (`{ email, linkedAt }` ou 404), `POST /admin/account/google` (`{ currentPassword }` → `{ url }`) e `DELETE /admin/account/google` (204, encerra todas as sessões).
 
 Admin (`/admin/*`, JWT obrigatório):
 - `GET|PUT /admin/profile`.
@@ -267,7 +273,7 @@ Admin (`/admin/*`, JWT obrigatório):
 - **Seam principal (única)**: testes e2e via supertest contra a aplicação Nest completa, com Postgres real (`db-test` no compose) e storage local apontando para diretório temporário. O banco é limpo entre suites.
 - **Cobertura mínima esperada**:
   - Auth: login ok/falha genérica; rota admin sem token → 401; refresh rotaciona; refresh após logout ou troca de senha → 401; senha nova abaixo do mínimo → 400; throttle de login e de troca de senha → 429.
-  - Login pelo Google (provedor trocado por um dublê via `overrideProvider`, nunca por variável de ambiente): atributos do cookie; sucesso com refresh funcionando e aviso com o método; `nao-vinculada`, `cancelado` e cada `erro` (cookie ausente, alterado, de outra chave, expirado ou reutilizado; `state` divergente; falha na troca); logs `warn` sem a query; logout e troca de senha revogam a sessão; 429 no início e na volta; sem credenciais → `erro`.
+  - Login pelo Google (provedor trocado por um dublê via `overrideProvider`, nunca por variável de ambiente): atributos do cookie; sucesso com refresh funcionando e aviso com o método; `nao-vinculada`, `cancelado` e cada `erro` (cookie ausente, alterado, de outra chave, expirado ou reutilizado; `state` divergente; falha na troca); logs `warn` sem a query; logout e troca de senha revogam a sessão; 429 no início e na volta; sem credenciais → `erro`. Vínculo: senha errada → 403; vínculo completo com `GET` mostrando o e-mail e o aviso; segundo vínculo → 409; `sub` de outro Admin, logout no intervalo e cookie alterado → `erro`; desvincular encerra as sessões, avisa e o `GET` passa a 404; 429 no vincular.
   - Validação: campo desconhecido → 400; `LocalizedText` sem `pt` → 400.
   - i18n: `?lang=en` com EN ausente cai para PT.
   - Visibilidade: item `visible=false` nunca aparece nas rotas públicas nem no CV.

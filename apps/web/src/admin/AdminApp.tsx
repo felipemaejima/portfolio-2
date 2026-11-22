@@ -1,11 +1,12 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Link, NavLink, Navigate, Route, Routes, useParams, useSearchParams } from 'react-router';
+import { Link, NavLink, Navigate, Route, Routes, useParams } from 'react-router';
 import { ApiError, login, logout, refreshSession } from '../lib/api';
 import { Logo } from '../lib/logo';
 import { ThemeToggle } from '../lib/theme';
 import { markAdminBrowser } from '../lib/visit';
 import { AccountPage } from './AccountPage';
 import { CollectionPage } from './CollectionPage';
+import { useArrivalParam } from './feedback';
 import { COLLECTIONS } from './collections';
 import { ProfilePage } from './ProfilePage';
 
@@ -61,7 +62,7 @@ export function AdminApp() {
                 {collection.title}
               </NavLink>
             ))}
-            <NavLink to="/admin/conta">Senha</NavLink>
+            <NavLink to="/admin/conta">Conta</NavLink>
           </nav>
         </div>
         <div className="admin-menu-footer">
@@ -77,7 +78,7 @@ export function AdminApp() {
       <main className="admin-main">
         <Routes>
           <Route index element={<ProfilePage />} />
-          <Route path="conta" element={<AccountPage onSessionEnded={() => endSession('Senha trocada. Entre com a nova senha.')} />} />
+          <Route path="conta" element={<AccountPage onSessionEnded={endSession} />} />
           <Route path=":collection" element={<CollectionRoute />} />
         </Routes>
       </main>
@@ -97,21 +98,9 @@ const GOOGLE_FAILURES = new Map([
 ]);
 
 function LoginPage({ notice, onLoggedIn }: { notice?: string; onLoggedIn: () => void }) {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const [error, setError] = useState(() => GOOGLE_FAILURES.get(searchParams.get('google') ?? ''));
+  const failure = useArrivalParam('google');
+  const [error, setError] = useState(() => GOOGLE_FAILURES.get(failure ?? ''));
   const [sending, setSending] = useState(false);
-
-  // Read once, then off the URL: a reload or a copied link doesn't say it again.
-  useEffect(() => {
-    if (!searchParams.has('google')) return;
-    setSearchParams(
-      (params) => {
-        params.delete('google');
-        return params;
-      },
-      { replace: true },
-    );
-  }, [searchParams, setSearchParams]);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();

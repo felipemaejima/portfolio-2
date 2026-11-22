@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useBlocker, type Blocker } from 'react-router';
+import { useBlocker, useSearchParams, type Blocker } from 'react-router';
 
 /** A question in the confirmation dialog (delete, discard changes). `onCancel`: on its cancel button and Esc. */
 type Confirmation = { title: string; message: string; confirm: string; cancel?: string; onConfirm: () => void; onCancel?: () => void };
 
 /**
- * The confirmation dialog (Perfil and collections): `ask` opens it with a question, `askDiscard` with "Descartar alterações?".
+ * The confirmation dialog: `ask` opens it with a question, `askDiscard` with "Descartar alterações?".
  * Render `dialog` once.
  */
 export function useConfirmation() {
@@ -59,6 +59,23 @@ export function useConfirmation() {
   return { ask, askDiscard, dialog };
 }
 
+/** A query parameter read once, on arrival, then taken off the URL: a reload or a copied link doesn't repeat it. */
+export function useArrivalParam(name: string) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [value] = useState(() => searchParams.get(name));
+  useEffect(() => {
+    if (!searchParams.has(name)) return;
+    setSearchParams(
+      (params) => {
+        params.delete(name);
+        return params;
+      },
+      { replace: true },
+    );
+  }, [name, searchParams, setSearchParams]);
+  return value;
+}
+
 /** Whether a form's values differ from the ones it started from (loaded or last saved). */
 export const isDirty = (values: unknown, initial: unknown) => JSON.stringify(values) !== JSON.stringify(initial);
 
@@ -83,7 +100,7 @@ export function useUnsavedChangesGuard(dirty: boolean, askDiscard: (onConfirm: (
   }
 }
 
-/** Toasts (Perfil and collections): `notify` adds one; a success one goes away by itself, an error one stays until closed. Render `toasts` once. */
+/** Toasts: `notify` adds one; a success one goes away by itself, an error one stays until closed. Render `toasts` once. */
 export function useToasts() {
   const [list, setList] = useState<{ id: number; text: string; error?: boolean }[]>([]);
   const last = useRef(0);

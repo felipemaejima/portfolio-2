@@ -34,7 +34,7 @@ describe('Login pelo Google', () => {
     google.account = { subject: 'google-sub-1', email: 'admin@gmail.test' };
   });
 
-  /** The admin's Conta vinculada, made straight in the database: linking from the panel comes in #90. */
+  /** The admin's Conta vinculada, made straight in the database (setup); linking from the panel is tested below. */
   const linkGoogleAccount = async (email = 'admin@gmail.test') => {
     const prisma = app.get(PrismaService);
     const admin = await prisma.admin.findFirstOrThrow();
@@ -70,7 +70,7 @@ describe('Login pelo Google', () => {
   it('starts by sending the browser to Google, with a short-lived cookie that only the callback receives', async () => {
     const res = await http.get('/api/auth/google').expect(302);
 
-    expect(res.headers.location).toMatch(/^https:\/\/google\.test\/auth\?state=[\w-]{43}$/);
+    expect(res.headers.location).toMatch(/^https:\/\/google\.test\/auth\?state=login\.[\w-]{43}$/);
     const cookie = cookieNamed(res, 'google_oauth');
     expect(cookie).toMatch(/HttpOnly/);
     expect(cookie).toMatch(/Secure/);
@@ -89,14 +89,14 @@ describe('Login pelo Google', () => {
     expectCookieDeleted(res);
     const refreshCookie = cookieNamed(res, 'refresh_token')!;
     expect(refreshCookie).toMatch(/SameSite=Strict/);
-    await http.post('/api/auth/refresh').set('Cookie', refreshCookie.split(';')[0]).expect(200);
+    const { body } = await http.post('/api/auth/refresh').set('Cookie', refreshCookie.split(';')[0]).expect(200);
     expect(discord.received).toEqual([
       expect.objectContaining({
         embeds: [expect.objectContaining({ fields: expect.arrayContaining([expect.objectContaining({ name: 'Método', value: 'Google (admin@gmail.test)' })]) })],
       }),
     ]);
-    // Straight from the database until #90's GET /admin/account/google shows the displayed email.
-    expect((await app.get(PrismaService).linkedAccount.findFirstOrThrow()).email).toBe('admin@gmail.test');
+    const linked = await http.get('/api/admin/account/google').set('X-Authorization', `Bearer ${body.accessToken as string}`);
+    expect(linked.body.email).toBe('admin@gmail.test');
   });
 
   it('refuses a Google account that is not a Conta vinculada: nao-vinculada', async () => {
@@ -212,5 +212,103 @@ describe('Login pelo Google', () => {
     } finally {
       await unconfigured.close();
     }
+  });
+
+  describe('Conta vinculada: vincular e desvincular', () => {
+    const loginWithPassword = async () => {
+      const { body } = await http.post('/api/auth/login').send(ADMIN).expect(200);
+      return `Bearer ${body.accessToken as string}`;
+    };
+    /** Starts linking from the Conta page: the URL the browser goes to, the pending-flow cookie and the state. */
+    const startLink = async (auth: string) => {
+      const res = await http.post('/api/admin/account/google').set('X-Authorization', auth).send({ currentPassword: ADMIN.password });
+      expect(res.status).toBe(200);
+      const state = new URL(res.body.url as string).searchParams.get('state')!;
+      return { cookie: cookieNamed(res, 'google_oauth')!.split(';')[0], state };
+    };
+    const linkedAccount = (auth: string) => http.get('/api/admin/account/google').set('X-Authorization', auth);
+    const alertTitles = () =>
+      discord.received.map((message) => (message as { embeds: { title: string }[] }).embeds[0].title);
+
+    it('asks for the current password', async () => {
+      const auth = await loginWithPassword();
+      await http.post('/api/admin/account/google').set('X-Authorization', auth).send({ currentPassword: 'wrong-password' }).expect(403);
+    });
+
+    it('links the Google account after Google: back on Conta, the account shown, the link announced', async () => {
+      const auth = await loginWithPassword();
+      await linkedAccount(auth).expect(404);
+      const { cookie, state } = await startLink(auth);
+      discord.received.length = 0;
+
+      const res = await callback(`state=${state}&code=the-code`, cookie).expect(302);
+
+      expect(res.headers.location).toBe('/admin/conta?google=vinculada');
+      expectCookieDeleted(res);
+      const { body } = await linkedAccount(auth).expect(200);
+      expect(body).toEqual({ email: 'admin@gmail.test', linkedAt: expect.stringMatching(/^\d{4}-/) });
+      expect(alertTitles()).toEqual(['Conta Google vinculada']);
+      await http.post('/api/admin/account/google').set('X-Authorization', auth).send({ currentPassword: ADMIN.password }).expect(409);
+    });
+
+    it('refuses a Google account already linked to another admin', async () => {
+      const prisma = app.get(PrismaService);
+      const other = await prisma.admin.create({ data: { email: 'other@test.dev', passwordHash: 'x' } });
+      await prisma.linkedAccount.create({ data: { adminId: other.id, provider: 'GOOGLE', subject: 'google-sub-1', email: 'x@gmail.test' } });
+      const auth = await loginWithPassword();
+      const { cookie, state } = await startLink(auth);
+
+      const res = await callback(`state=${state}&code=the-code`, cookie).expect(302);
+      expect(res.headers.location).toBe('/admin/conta?google=erro');
+      await linkedAccount(auth).expect(404);
+    });
+
+    it('refuses the link when the sessions ended while on Google (logout): revoking wins', async () => {
+      const auth = await loginWithPassword();
+      const { cookie, state } = await startLink(auth);
+      await http.post('/api/auth/logout').set('X-Authorization', auth).expect(204);
+
+      const res = await callback(`state=${state}&code=the-code`, cookie).expect(302);
+      expect(res.headers.location).toBe('/admin/conta?google=erro');
+      await linkedAccount(auth).expect(404); // the access token lives on until it expires; the link didn't happen
+    });
+
+    it('refuses a linking cookie it can\'t open (altered, or expired on Google) and still comes back to Conta', async () => {
+      const auth = await loginWithPassword();
+      const { cookie, state } = await startLink(auth);
+      const res = await callback(`state=${state}&code=the-code`, tamper(cookie)).expect(302);
+      expect(res.headers.location).toBe('/admin/conta?google=erro');
+      await linkedAccount(auth).expect(404);
+    });
+
+    it('comes back to Conta quietly when the admin cancels on Google', async () => {
+      const auth = await loginWithPassword();
+      const { cookie, state } = await startLink(auth);
+      const res = await callback(`error=access_denied&state=${state}`, cookie).expect(302);
+      expect(res.headers.location).toBe('/admin/conta');
+      await linkedAccount(auth).expect(404);
+    });
+
+    it('unlinks: every session ends, the unlink is announced, and nothing is linked any more', async () => {
+      await linkGoogleAccount();
+      const login = await http.post('/api/auth/login').send(ADMIN).expect(200);
+      const auth = `Bearer ${login.body.accessToken as string}`; // and its refresh cookie, checked below
+      discord.received.length = 0;
+
+      const res = await http.delete('/api/admin/account/google').set('X-Authorization', auth).expect(204);
+
+      expect(cookieNamed(res, 'refresh_token')).toMatch(/^refresh_token=;/);
+      await http.post('/api/auth/refresh').set('Cookie', cookieNamed(login, 'refresh_token')!.split(';')[0]).expect(401);
+      expect(alertTitles()).toEqual(['Conta Google desvinculada']);
+      await linkedAccount(auth).expect(404);
+      await http.delete('/api/admin/account/google').set('X-Authorization', auth).expect(404);
+    });
+
+    it('allows 5 link attempts per minute per IP', async () => {
+      const auth = await loginWithPassword();
+      const attempt = () => http.post('/api/admin/account/google').set('X-Authorization', auth).send({ currentPassword: 'wrong-password' });
+      for (let i = 0; i < 5; i++) await attempt().expect(403);
+      await attempt().expect(429);
+    });
   });
 });

@@ -123,13 +123,92 @@
         ]
       }
     },
+    "/admin/account/google": {
+      "get": {
+        "operationId": "AuthController_linkedGoogleAccount",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkedGoogleAccountDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "tags": [
+          "auth"
+        ]
+      },
+      "post": {
+        "operationId": "AuthController_startGoogleLink",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CurrentPasswordDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoogleUrlDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "Linking starts from inside the panel and asks for the current password: a stolen access token alone can't link\nsomeone else's Google account. Rate-limited like login. The browser then goes to `url`.",
+        "tags": [
+          "auth"
+        ]
+      },
+      "delete": {
+        "operationId": "AuthController_unlinkGoogleAccount",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "Also ends every session, like a password change. Needs no password: cutting off a suspicious Login must be quick.",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/auth/google/callback": {
       "get": {
         "operationId": "AuthController_googleCallback",
         "parameters": [],
         "responses": {
           "302": {
-            "description": "To /admin with a session, or to /admin?google=erro|cancelado|nao-vinculada"
+            "description": "To /admin with a session, /admin?google=erro|cancelado|nao-vinculada, or /admin/conta?google=vinculada|erro"
           }
         },
         "summary": "Login pelo Google, Google's callback. Only ever redirects to fixed paths of the panel, never to one from the request.",
@@ -1852,19 +1931,58 @@
       "ChangePasswordDto": {
         "type": "object",
         "properties": {
-          "currentPassword": {
-            "type": "string",
-            "maxLength": 256
-          },
           "newPassword": {
             "type": "string",
             "description": "Minimum length comes from PASSWORD_MIN_LENGTH.",
             "maxLength": 256
+          },
+          "currentPassword": {
+            "type": "string",
+            "maxLength": 256
           }
         },
         "required": [
-          "currentPassword",
-          "newPassword"
+          "newPassword",
+          "currentPassword"
+        ]
+      },
+      "LinkedGoogleAccountDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string"
+          },
+          "linkedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "linkedAt"
+        ]
+      },
+      "CurrentPasswordDto": {
+        "type": "object",
+        "properties": {
+          "currentPassword": {
+            "type": "string",
+            "maxLength": 256
+          }
+        },
+        "required": [
+          "currentPassword"
+        ]
+      },
+      "GoogleUrlDto": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "url"
         ]
       },
       "LocalizedTextDto": {

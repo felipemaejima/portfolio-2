@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Inject, Logger, Patch, Post, Redirect, Req, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Inject, Logger, Patch, Post, Redirect, Req, Res, UseGuards } from '@nestjs/common';
 import { ApiCookieAuth, ApiFoundResponse, ApiSecurity, ApiTags } from '@nestjs/swagger';
 import { ADMIN_AUTH } from './auth.guard';
 import { InjectThrottlerStorage, Throttle, type ThrottlerStorage } from '@nestjs/throttler';
@@ -8,11 +8,24 @@ import type { CookieOptions, Request, Response } from 'express';
 import { Public } from '../common/public.decorator';
 import { CONFIG, type Config } from '../config/config';
 import type { Admin } from '../generated/prisma/client';
-import { AccessTokenDto, ChangePasswordDto, LoginDto } from './auth.dto';
+import {
+  AccessTokenDto,
+  ChangePasswordDto,
+  CurrentPasswordDto,
+  GoogleUrlDto,
+  LinkedGoogleAccountDto,
+  LoginDto,
+} from './auth.dto';
 import { AdminId } from './auth.guard';
 import { AuthService } from './auth.service';
 import { GOOGLE_CALLBACK_PATH, GoogleProvider, type GoogleAccount } from './google.provider';
-import { openPendingFlow, PENDING_FLOW_TTL_MS, sealPendingFlow, type PendingFlow } from './pending-flow-cookie';
+import {
+  openPendingFlow,
+  PENDING_FLOW_TTL_MS,
+  sealPendingFlow,
+  type PendingFlow,
+  type PendingIntent,
+} from './pending-flow-cookie';
 import { randomBytes } from 'node:crypto';
 
 export const REFRESH_COOKIE = 'refresh_token';
@@ -20,9 +33,15 @@ export const PENDING_FLOW_COOKIE = 'google_oauth';
 
 const randomToken = () => randomBytes(32).toString('base64url'); // 43 chars: also a valid PKCE code_verifier
 const logger = new Logger('GoogleLogin');
+/** Logs a refusal someone can cause by calling the callback: warn, never error (no Alerta). */
+const refuse = <T extends string>(failure: T, reason: string) => {
+  logger.warn(`Google callback refused: ${reason}`);
+  return failure;
+};
 
-/** Where a Login pelo Google attempt that opened no session sends the browser: /admin?google=<code>. */
+/** Why a trip to Google opened no session: /admin?google=<code> (a link that fails goes to /admin/conta?google=erro). */
 type GoogleFailure = 'erro' | 'cancelado' | 'nao-vinculada';
+type LinkFlow = Extract<PendingFlow, { intent: 'vincular' }>;
 
 @ApiTags('auth')
 @Controller()
@@ -65,7 +84,7 @@ export class AuthController {
   @HttpCode(204)
   async logout(@AdminId() adminId: string, @Res({ passthrough: true }) res: Response) {
     await this.auth.revokeSessions(adminId);
-    res.clearCookie(REFRESH_COOKIE, { ...this.cookieOptions(), maxAge: undefined });
+    this.clearRefreshCookie(res);
   }
 
   /** Also ends every session. */
@@ -81,7 +100,7 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ) {
     await this.auth.changePassword(adminId, dto.currentPassword, dto.newPassword);
-    res.clearCookie(REFRESH_COOKIE, { ...this.cookieOptions(), maxAge: undefined });
+    this.clearRefreshCookie(res);
   }
 
   /** Login pelo Google, start: fresh state, nonce and PKCE verifier, sealed in a cookie, and off to Google. */
@@ -92,18 +111,43 @@ export class AuthController {
   @Redirect()
   @ApiFoundResponse({ description: 'To Google, or to /admin?google=erro without Google credentials' })
   async googleStart(@Res({ passthrough: true }) res: Response) {
-    const { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, OAUTH_STATE_SECRET } = this.config;
-    if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET || !OAUTH_STATE_SECRET) return { url: '/admin?google=erro' };
-    const flow: PendingFlow = { intent: 'login', state: randomToken(), nonce: randomToken(), codeVerifier: randomToken() };
-    let url: string;
-    try {
-      url = await this.google.authorizationUrl(flow);
-    } catch (error) {
-      logger.error(`Google discovery failed: ${(error as Error).message}`); // ours (or Google's), never the caller's
-      return { url: '/admin?google=erro' };
-    }
-    res.cookie(PENDING_FLOW_COOKIE, sealPendingFlow(flow, OAUTH_STATE_SECRET), this.pendingFlowCookieOptions());
-    return { url };
+    return { url: (await this.startGoogleFlow(res, { intent: 'login' })) ?? '/admin?google=erro' };
+  }
+
+  @ApiSecurity(ADMIN_AUTH)
+  @Get('admin/account/google')
+  async linkedGoogleAccount(@AdminId() adminId: string): Promise<LinkedGoogleAccountDto> {
+    const { email, createdAt } = await this.auth.googleAccount(adminId);
+    return { email, linkedAt: createdAt };
+  }
+
+  /**
+   * Linking starts from inside the panel and asks for the current password: a stolen access token alone can't link
+   * someone else's Google account. Rate-limited like login. The browser then goes to `url`.
+   */
+  @ApiSecurity(ADMIN_AUTH)
+  @UseGuards(ClientIpThrottlerGuard)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Post('admin/account/google')
+  @HttpCode(200)
+  async startGoogleLink(
+    @AdminId() adminId: string,
+    @Body() dto: CurrentPasswordDto,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<GoogleUrlDto> {
+    const { tokenVersion } = await this.auth.authorizeGoogleLink(adminId, dto.currentPassword);
+    const url = await this.startGoogleFlow(res, { intent: 'vincular', adminId, tokenVersion });
+    return { url: url ?? '/admin/conta?google=erro' };
+  }
+
+  /** Also ends every session, like a password change. Needs no password: cutting off a suspicious Login must be quick. */
+  @ApiSecurity(ADMIN_AUTH)
+  @Delete('admin/account/google')
+  @HttpCode(204)
+  async unlinkGoogleAccount(@AdminId() adminId: string, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    const { email } = await this.auth.unlinkGoogleAccount(adminId);
+    this.clearRefreshCookie(res);
+    await this.announce(req, 'Conta Google desvinculada', { name: 'Conta', value: email });
   }
 
   /** Login pelo Google, Google's callback. Only ever redirects to fixed paths of the panel, never to one from the request. */
@@ -112,44 +156,72 @@ export class AuthController {
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Get('auth/google/callback')
   @Redirect()
-  @ApiFoundResponse({ description: 'To /admin with a session, or to /admin?google=erro|cancelado|nao-vinculada' })
+  @ApiFoundResponse({
+    description: 'To /admin with a session, /admin?google=erro|cancelado|nao-vinculada, or /admin/conta?google=vinculada|erro',
+  })
   async googleCallback(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     res.clearCookie(PENDING_FLOW_COOKIE, { ...this.pendingFlowCookieOptions(), maxAge: undefined }); // whatever happens
-    const attempt = await this.googleLogin(req);
-    if (typeof attempt === 'string') return { url: `/admin?google=${attempt}` };
-    await this.openSession(attempt.admin, `Google (${attempt.email})`, req, res);
+    const params = new URL(req.originalUrl, 'http://callback').searchParams;
+    const flow = openPendingFlow(req.cookies?.[PENDING_FLOW_COOKIE], this.config.OAUTH_STATE_SECRET);
+    const result = flow
+      ? await this.googleAccountFor(flow, params)
+      : refuse('erro', 'pending-flow cookie missing, altered, expired or sealed with another key');
+
+    // The state starts with the intent: a link whose cookie is gone (say, 10 min on Google) still comes back to Conta.
+    if (flow ? flow.intent === 'vincular' : params.get('state')?.startsWith('vincular.')) {
+      // An account comes only from an opened flow, so here the flow is a link's.
+      const outcome = typeof result === 'string' ? result : await this.linkGoogle(flow as LinkFlow, result, req);
+      return { url: outcome === 'cancelado' ? '/admin/conta' : `/admin/conta?google=${outcome}` };
+    }
+    if (typeof result === 'string') return { url: `/admin?google=${result}` };
+
+    const admin = await this.auth.findByGoogleAccount(result);
+    if (!admin) return { url: `/admin?google=${refuse('nao-vinculada', 'this Google account is not a Conta vinculada')}` };
+    await this.openSession(admin, `Google (${result.email})`, req, res);
     return { url: '/admin' };
   }
 
+  private async linkGoogle(flow: LinkFlow, account: GoogleAccount, req: Request) {
+    if (!(await this.auth.linkGoogleAccount(flow.adminId, flow.tokenVersion, account))) {
+      return refuse('erro', 'sessions changed meanwhile, or one side is already linked');
+    }
+    await this.announce(req, 'Conta Google vinculada', { name: 'Conta', value: account.email });
+    return 'vinculada';
+  }
+
   /**
-   * Which Admin Google proves, or why not. Failures someone can cause just by calling the callback are logged as warn,
-   * never error: they must not raise an Alerta. The query string is never logged (it carries the authorization code).
+   * The Google account Google vouches for, or why not. Failures someone can cause just by calling the callback are
+   * logged as warn, never error: they must not raise an Alerta. The query string is never logged (it carries the code).
    */
-  private async googleLogin(req: Request): Promise<{ admin: Admin; email: string } | GoogleFailure> {
-    const refuse = (failure: GoogleFailure, reason: string) => {
-      logger.warn(`Login pelo Google attempt refused: ${reason}`);
-      return failure;
-    };
-    const flow = openPendingFlow(req.cookies?.[PENDING_FLOW_COOKIE], this.config.OAUTH_STATE_SECRET);
-    if (!flow) return refuse('erro', 'pending-flow cookie missing, altered, expired or sealed with another key');
+  private async googleAccountFor(flow: PendingFlow, params: URLSearchParams): Promise<GoogleAccount | GoogleFailure> {
     if (!(await this.firstUse(flow))) return refuse('erro', 'pending-flow cookie used before');
 
-    const params = new URL(req.originalUrl, 'http://callback').searchParams;
     const error = params.get('error');
     if (error === 'access_denied') return 'cancelado';
     if (error) return refuse('erro', 'Google answered with an error'); // its value is part of the query: not logged
     if (params.get('state') !== flow.state) return refuse('erro', 'state does not match the cookie');
 
-    let account: GoogleAccount;
     try {
-      account = await this.google.exchange(params, flow);
+      return await this.google.exchange(params, flow);
     } catch (e) {
       const { name, code, error: oauthError } = e as Error & { code?: string; error?: string }; // never the message
       return refuse('erro', `exchange failed: ${[name, code, oauthError].filter(Boolean).join(' ')}`);
     }
-    const admin = await this.auth.findByGoogleAccount(account);
-    if (!admin) return refuse('nao-vinculada', 'this Google account is not a Conta vinculada');
-    return { admin, email: account.email };
+  }
+
+  /** Seals a fresh flow for `intent` in the cookie; Google's authorization URL, or undefined when Google can't be used. */
+  private async startGoogleFlow(res: Response, intent: PendingIntent): Promise<string | undefined> {
+    const { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, OAUTH_STATE_SECRET } = this.config;
+    if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET || !OAUTH_STATE_SECRET) return undefined;
+    const flow: PendingFlow = { ...intent, state: `${intent.intent}.${randomToken()}`, nonce: randomToken(), codeVerifier: randomToken() };
+    try {
+      const url = await this.google.authorizationUrl(flow);
+      res.cookie(PENDING_FLOW_COOKIE, sealPendingFlow(flow, OAUTH_STATE_SECRET), this.pendingFlowCookieOptions());
+      return url;
+    } catch (error) {
+      logger.error(`Google discovery failed: ${(error as Error).message}`); // ours (or Google's), never the caller's
+      return undefined;
+    }
   }
 
   /**
@@ -168,18 +240,21 @@ export class AuthController {
   private async openSession(admin: Admin, method: string, req: Request, res: Response): Promise<AccessTokenDto> {
     const { accessToken, refreshToken } = await this.auth.issueTokens(admin);
     res.cookie(REFRESH_COOKIE, refreshToken, this.cookieOptions());
-    await this.announceLogin(method, req);
+    await this.announce(req, 'Login no admin', { name: 'Método', value: method });
     return { accessToken };
   }
 
-  /** A Login that wasn't the owner is an incident: a silent message in #alertas. Discord failing never blocks it. */
-  private announceLogin(method: string, req: Request) {
+  /**
+   * A Login or a link that wasn't the owner is an incident (linking is how an intruder would keep access): a silent
+   * message in #alertas, `field` then the IP and the browser. Discord failing never blocks anything.
+   */
+  private announce(req: Request, title: string, field: { name: string; value: string }) {
     return postToDiscord(
       this.config.DISCORD_ALERTS_WEBHOOK_URL,
       {
-        title: 'Login no admin',
+        title,
         fields: [
-          { name: 'Método', value: method, inline: true },
+          { ...field, inline: true },
           { name: 'IP', value: clientIp(req, this.config.CLIENT_IP_HEADER), inline: true },
           { name: 'Navegador', value: cut(req.header('user-agent') || 'desconhecido', 200) },
         ],
@@ -192,6 +267,10 @@ export class AuthController {
   /** Lax, unlike the refresh cookie: a Strict cookie doesn't come along on the navigation back from Google. */
   private pendingFlowCookieOptions(): CookieOptions {
     return { httpOnly: true, secure: true, sameSite: 'lax', path: GOOGLE_CALLBACK_PATH, maxAge: PENDING_FLOW_TTL_MS };
+  }
+
+  private clearRefreshCookie(res: Response) {
+    res.clearCookie(REFRESH_COOKIE, { ...this.cookieOptions(), maxAge: undefined });
   }
 
   private cookieOptions(): CookieOptions {
