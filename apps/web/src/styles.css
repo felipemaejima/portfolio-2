@@ -417,12 +417,22 @@ main.section > h1 { font-size: 32px; margin-bottom: 24px; }
 .item-menu-toggle { display: none; }
 .hidden-item .admin-list-summary { opacity: 0.55; }
 .empty { padding: 32px; text-align: center; border: 1px dashed var(--color-divider); border-radius: 10px; }
-.localized { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+/* PT/EN pairs: both columns may shrink, or a field's own minimum width pushes EN out of the group. */
+.localized { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .localized legend { grid-column: 1 / -1; }
-.list-item { display: flex; gap: 10px; align-items: flex-start; }
-.list-item .localized { flex: 1; }
-.media-preview { max-height: 140px; width: auto; border-radius: 8px; }
-.media.drop-target { border: 1px dashed var(--color-accent); background: var(--color-surface); }
+/* List items (Sobre mim's paragraphs): a header row with the number and Remover, the PT/EN pair below at full width. Floated,
+   the legend is laid out in the grid like the fields instead of on the border; Remover shares its row, at the end. */
+.localized-list .localized > legend { float: left; grid-row: 1; align-self: center; }
+.localized-list .localized > .button { grid-row: 1; grid-column: 1 / -1; justify-self: end; }
+/* Images: the whole group is a drop zone, lit while a file is dragged over it. */
+.media { border-style: dashed; }
+.media.drop-target { border-color: var(--color-accent); background: var(--color-surface); }
+.media-preview { max-height: 140px; width: auto; align-self: flex-start; border-radius: 8px; }
+/* "Escolher imagem" is a label over a visually hidden input: a button's color over `.form label`, and the input's focus
+   and disabled states. */
+.form .media label.button { color: var(--color-text); }
+.media label.button:has(:focus-visible) { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+.media label.button:has(:disabled) { opacity: 0.4; pointer-events: none; }
 .admin-list-summary .tag { display: inline-block; margin-left: 8px; white-space: nowrap; }
 
 /* Below this the inline nav no longer fits on one row: one row of 44px targets, sections in a popover menu. */
