@@ -19,11 +19,12 @@ export class AuthService {
     @Inject(CONFIG) private readonly config: Config,
   ) {}
 
-  async login(email: string, password: string) {
+  /** The Admin the email and password prove; opening the session is up to the caller. */
+  async findByCredentials(email: string, password: string) {
     const admin = await this.prisma.admin.findUnique({ where: { email: email.toLowerCase() } });
     const valid = await argon2.verify(admin?.passwordHash ?? (await this.dummyHash), password);
     if (!admin || !valid) throw new UnauthorizedException('Invalid credentials');
-    return this.issueTokens(admin);
+    return admin;
   }
 
   async refresh(token: string | undefined) {
@@ -62,7 +63,7 @@ export class AuthService {
     });
   }
 
-  private async issueTokens(admin: Admin) {
+  async issueTokens(admin: Admin) {
     const [accessToken, refreshToken] = await Promise.all([
       this.jwt.signAsync(
         { sub: admin.id },

@@ -18,6 +18,11 @@ export function AdminApp() {
     refreshSession().then((ok) => setSession(ok ? 'in' : 'out'), () => setSession('out'));
   }, []);
 
+  // However the session opened (restored on load or a Login), this browser never counts as a Visita.
+  useEffect(() => {
+    if (session === 'in') markAdminBrowser();
+  }, [session]);
+
   if (session === 'checking') return <p className="status loading">Carregando…</p>;
   if (session === 'out') return <LoginPage notice={notice} onLoggedIn={() => setSession('in')} />;
 
@@ -94,7 +99,6 @@ function LoginPage({ notice, onLoggedIn }: { notice?: string; onLoggedIn: () => 
     setError(undefined);
     try {
       await login(form.get('email') as string, form.get('password') as string);
-      markAdminBrowser(); // this browser never counts as a Visita
       onLoggedIn();
     } catch (e) {
       setError(e instanceof ApiError && e.status === 401 ? 'E-mail ou senha incorretos.' : (e as Error).message);

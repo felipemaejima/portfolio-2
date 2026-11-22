@@ -142,14 +142,15 @@ Uma API em NestJS + Prisma + PostgreSQL que é a fonte única do conteúdo do po
 - **Revogação**: o admin tem `tokenVersion` (int). O refresh carrega a versão; o endpoint de refresh compara com o banco (única leitura de estado). Logout e troca de senha fazem `tokenVersion++`, invalidando todos os refresh tokens.
 - Segredos distintos para access e refresh; algoritmo fixado na verificação.
 - Senha com **argon2id**. Mensagem de erro de login genérica. Tamanho mínimo configurável por `PASSWORD_MIN_LENGTH` (padrão 5), aplicado na troca de senha e no seed.
-- **Aviso de Login**: cada Login (e-mail e senha corretos) gera uma mensagem **silenciosa** (flag `SUPPRESS_NOTIFICATIONS`) no `#alertas` do Discord, com IP real (header da borda), navegador (user agent cortado em 200 caracteres) e horário (`timestamp` do embed, mostrado no fuso de quem lê). Um Login que não foi o dono é um incidente. Refresh e senha errada não avisam. Webhook em `DISCORD_ALERTS_WEBHOOK_URL` (`discord-alerts-webhook` no SSM), obrigatório em produção. O Discord com erro ou lento (até ~2 s) **não bloqueia o Login**: a falha vai para o log com nível `error`, que o alarme de erros da API pega. País fica de fora: o plano Free do CloudFront não repassa esse header.
+- **Abertura de sessão**: todo Login, qualquer que seja o método, abre a sessão por um único ponto (`AuthController.openSession`): emite os tokens, grava o refresh cookie e anuncia o Login com o método. O método só resolve qual Admin é.
+- **Aviso de Login**: cada Login (e-mail e senha corretos) gera uma mensagem **silenciosa** (flag `SUPPRESS_NOTIFICATIONS`) no `#alertas` do Discord, com o método ("Senha"), IP real (header da borda), navegador (user agent cortado em 200 caracteres) e horário (`timestamp` do embed, mostrado no fuso de quem lê). Um Login que não foi o dono é um incidente. Refresh e senha errada não avisam. Webhook em `DISCORD_ALERTS_WEBHOOK_URL` (`discord-alerts-webhook` no SSM), obrigatório em produção. O Discord com erro ou lento (até ~2 s) **não bloqueia o Login**: a falha vai para o log com nível `error`, que o alarme de erros da API pega. País fica de fora: o plano Free do CloudFront não repassa esse header.
 - Sem signup público; admin criado por **seed idempotente** a partir de `ADMIN_EMAIL`/`ADMIN_PASSWORD`.
 - MFA fora de escopo.
 
 ### Segurança transversal
 - Helmet; CORS com allowlist (em prod, front e API no mesmo site via reverse proxy em `/api`, então CORS só importa em dev).
 - `ValidationPipe` global com `whitelist`, `forbidNonWhitelisted`, `transform`.
-- `@nestjs/throttler`: limites estritos por IP em login, refresh, `POST /contact` e `GET /cv`, com contadores no Postgres (compartilhados entre instâncias). O limite global por IP fica no WAF (ver `infra.md`).
+- `@nestjs/throttler`: limites estritos por IP em login, refresh, troca de senha (5 por minuto, como o login: um access token roubado não testa senhas sem limite), `POST /contact` e `GET /cv`, com contadores no Postgres (compartilhados entre instâncias). O limite global por IP fica no WAF (ver `infra.md`).
 - Limites de tamanho de corpo e de upload.
 - HTTPS terminado na borda (CloudFront). O IP real do cliente vem de um header gravado pela borda (`CLIENT_IP_HEADER`), nunca do `X-Forwarded-For`, cujas entradas o cliente pode forjar.
 - Logs estruturados do Nest; sem tabela de auditoria nem lockout por conta.
@@ -219,7 +220,7 @@ Admin (`/admin/*`, JWT obrigatório):
 
 ### Visita (Discord)
 - **Visita** (ver `GLOSSARY.md`): alguém que não é o admin abriu o site público. Cada Visita nova gera uma mensagem no `#visitas` com página, idioma, origem e navegador, e horário (`timestamp`).
-- **No navegador** (`apps/web/src/lib/visit.ts`): as páginas públicas chamam `POST /visits` ao montar, no máximo uma vez a cada 24 h por navegador (`localStorage`), sem a página esperar a resposta. Só conta como anunciado quando a API responde (204, ou 429 porque o IP já anunciou): uma falha (rede, 5xx, o site publicado antes da API) é tentada de novo na próxima carga. Recarregar ou navegar não chama nada. O navegador onde houve Login fica marcado (`localStorage`, mesma origem que o admin) e nunca anuncia. Sem `localStorage` (bloqueado), não anuncia.
+- **No navegador** (`apps/web/src/lib/visit.ts`): as páginas públicas chamam `POST /visits` ao montar, no máximo uma vez a cada 24 h por navegador (`localStorage`), sem a página esperar a resposta. Só conta como anunciado quando a API responde (204, ou 429 porque o IP já anunciou): uma falha (rede, 5xx, o site publicado antes da API) é tentada de novo na próxima carga. Recarregar ou navegar não chama nada. O navegador fica marcado como do admin (`localStorage`, mesma origem que o admin) sempre que uma sessão abre no painel, por Login ou restaurada ao carregar, e nunca anuncia. Sem `localStorage` (bloqueado), não anuncia.
 - **Na API, dois limites**, ambos com contadores no Postgres (`RateLimit`):
   - **por IP**: um a cada 24 h pelo throttle por IP que já existe (chave sha256, o IP não fica em texto puro); repetição → 429. Ele roda antes do teto, então uma repetição não gasta o teto;
   - **teto do site inteiro**: 50 avisos a cada 24 h, só para `/visits` (login, refresh e contato não contam nem são afetados). Acima disso → 204 sem envio, sem mensagem de "teto atingido".
@@ -253,7 +254,7 @@ Admin (`/admin/*`, JWT obrigatório):
 - **Um bom teste** exercita comportamento externo: faz uma requisição HTTP e verifica status, corpo, headers e efeitos observáveis pela própria API. Não inspeciona services, repositórios ou chamadas internas.
 - **Seam principal (única)**: testes e2e via supertest contra a aplicação Nest completa, com Postgres real (`db-test` no compose) e storage local apontando para diretório temporário. O banco é limpo entre suites.
 - **Cobertura mínima esperada**:
-  - Auth: login ok/falha genérica; rota admin sem token → 401; refresh rotaciona; refresh após logout ou troca de senha → 401; senha nova abaixo do mínimo → 400; throttle de login → 429.
+  - Auth: login ok/falha genérica; rota admin sem token → 401; refresh rotaciona; refresh após logout ou troca de senha → 401; senha nova abaixo do mínimo → 400; throttle de login e de troca de senha → 429.
   - Validação: campo desconhecido → 400; `LocalizedText` sem `pt` → 400.
   - i18n: `?lang=en` com EN ausente cai para PT.
   - Visibilidade: item `visible=false` nunca aparece nas rotas públicas nem no CV.
