@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useRef, useState, type DragEvent, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
+import { useBlocker } from 'react-router';
 import { api } from '../lib/api';
 import type { Collection } from './collections';
 import { FieldInput, missingEnglish, toFormValues, toPayload, useSaveShortcut } from './fields';
 
 type Item = Record<string, unknown> & { id: string; visible: boolean };
 type Values = Record<string, unknown>;
-/** A question in the confirmation dialog (delete, discard changes). */
-type Confirmation = { title: string; message: string; confirm: string; cancel?: string; onConfirm: () => void };
+/** A question in the confirmation dialog (delete, discard changes). `onCancel`: on its cancel button and Esc. */
+type Confirmation = { title: string; message: string; confirm: string; cancel?: string; onConfirm: () => void; onCancel?: () => void };
 const refuseFiles = (event: DragEvent) => {
   if (event.dataTransfer.types.includes('Files')) event.preventDefault();
 };
@@ -70,9 +71,7 @@ export function CollectionPage({ collection }: { collection: Collection }) {
     if (!isEditing && dialog.open) dialog.close();
   }, [isEditing]);
   useSaveShortcut(submitRef, isEditing);
-  // Leaving the page (reload, closing the tab) with unsaved changes: the browser asks first. In-app links can't be reached
-  // meanwhile (the modal makes the page inert).
-  // ponytail: the browser's Back still leaves without asking; that needs a data router (useBlocker).
+  // Reloading or closing the tab with unsaved changes: the browser asks first.
   useEffect(() => {
     if (!dirty) return;
     const warn = (event: BeforeUnloadEvent) => event.preventDefault();
@@ -85,17 +84,24 @@ export function CollectionPage({ collection }: { collection: Collection }) {
     if (confirmation) confirmRef.current?.showModal(); // focuses its first button: the safe choice
   }, [confirmation]);
 
-  /** ✕, Cancelar and Esc: nothing while saving or uploading; with unsaved changes, asks first. */
-  const closeForm = () => {
-    if (locked) return;
-    if (!dirty) return setEditing(null);
+  const askDiscard = (onConfirm: () => void, onCancel?: () => void) =>
     setConfirmation({
       title: 'Descartar alterações?',
       message: 'O que você mudou neste formulário ainda não foi salvo.',
       confirm: 'Descartar',
       cancel: 'Continuar editando',
-      onConfirm: () => setEditing(null),
+      onConfirm,
+      onCancel,
     });
+  // Back or a link with unsaved changes: the router holds the navigation while the same question is asked (once per hold).
+  const blocker = useBlocker(dirty);
+  if (blocker.state === 'blocked' && confirmation?.onConfirm !== blocker.proceed) askDiscard(blocker.proceed, blocker.reset);
+
+  /** ✕, Cancelar and Esc: nothing while saving or uploading; with unsaved changes, asks first. */
+  const closeForm = () => {
+    if (locked) return;
+    if (!dirty) return setEditing(null);
+    askDiscard(() => setEditing(null));
   };
 
   /** Saves a change to one row in the background, with a spinner on it. If it fails: an error toast, then `undo`. */
@@ -258,13 +264,27 @@ export function CollectionPage({ collection }: { collection: Collection }) {
         )}
       </dialog>
 
-      <dialog ref={confirmRef} className="modal confirm" role="alertdialog" aria-labelledby="confirm-title" aria-describedby="confirm-message">
+      <dialog
+        ref={confirmRef}
+        className="modal confirm"
+        role="alertdialog"
+        aria-labelledby="confirm-title"
+        aria-describedby="confirm-message"
+        onCancel={() => confirmation?.onCancel?.()}
+      >
         {confirmation && (
           <div className="form">
             <h2 id="confirm-title">{confirmation.title}</h2>
             <p id="confirm-message">{confirmation.message}</p>
             <div className="actions">
-              <button type="button" className="button" onClick={() => confirmRef.current?.close()}>
+              <button
+                type="button"
+                className="button"
+                onClick={() => {
+                  confirmRef.current?.close();
+                  confirmation.onCancel?.();
+                }}
+              >
                 {confirmation.cancel ?? 'Cancelar'}
               </button>
               <button
