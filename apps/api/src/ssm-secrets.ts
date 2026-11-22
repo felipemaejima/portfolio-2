@@ -8,6 +8,8 @@ const SECRETS = {
   DISCORD_CONTACT_WEBHOOK_URL: 'discord-contact-webhook',
   DISCORD_ALERTS_WEBHOOK_URL: 'discord-alerts-webhook',
   DISCORD_VISITS_WEBHOOK_URL: 'discord-visits-webhook',
+  GOOGLE_CLIENT_SECRET: 'google-client-secret',
+  OAUTH_STATE_SECRET: 'oauth-state-secret',
 } as const;
 
 type SsmClient = Pick<SSMClient, 'send'>;

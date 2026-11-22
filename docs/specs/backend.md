@@ -155,7 +155,7 @@ Decisões no ADR 0002; fontes em `docs/research/oauth-google.md`.
 - **Uso único**: a volta apaga o cookie em qualquer resultado, e uma cópia reenviada dentro dos 10 min é recusada por um contador do rate limit (`RateLimit`, chave `google-flow:<state>`, limite 1).
 - **Volta** (`/admin?google=<código>` nas falhas, sempre caminhos fixos): cookie ausente, alterado, de outra chave, expirado ou já usado → `erro`; `error=access_denied` → `cancelado`; outro `error` → `erro`; `state` diferente do cookie → `erro`; falha na troca → `erro`; `sub` sem Conta vinculada → `nao-vinculada`; sucesso → atualiza o e-mail exibido, abre a sessão pelo ponto único e responde 302 para `/admin`, onde o painel restaura a sessão pelo refresh cookie.
 - **Logs**: falhas que quem chama consegue causar vão como `warn`, nunca `error` (não disparam Alerta). A query string da volta nunca é logada (leva o code); da falha na troca só vão o nome e o código do erro. Falha no discovery ao iniciar é `error`.
-- **Config**: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` e `OAUTH_STATE_SECRET` (mínimo de 32 caracteres, diferente dos segredos JWT). Opcionais por enquanto; sem os três, o início responde 302 para `/admin?google=erro`.
+- **Config**: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` e `OAUTH_STATE_SECRET` (mínimo de 32 caracteres, diferente dos segredos JWT). Obrigatórios em produção (o client ID vem do Terraform; os dois segredos, do SSM no boot: ver `infra.md`); fora dela, sem os três, o início responde 302 para `/admin?google=erro`.
 
 ### Segurança transversal
 - Helmet; CORS com allowlist (em prod, front e API no mesmo site via reverse proxy em `/api`, então CORS só importa em dev).

@@ -46,15 +46,28 @@ resource "aws_ssm_parameter" "jwt" {
   value    = each.value.result
 }
 
-# The Neon URLs and the Discord webhooks are written by `make db-secrets` / `make discord-secrets` (never by Terraform,
-# so they stay out of its state and plans). The Lambda may read all of these (api_secrets below); at boot it reads the
-# pooled URL, the JWT secrets and the webhooks its features use (apps/api/src/ssm-secrets.ts). CI reads only the
+# Key of the Login pelo Google cookie (ADR 0002): a secret of its own, like the JWT ones.
+resource "random_password" "oauth_state" {
+  length  = 64
+  special = false
+}
+
+resource "aws_ssm_parameter" "oauth_state" {
+  name  = "${local.ssm_prefix}/oauth-state-secret"
+  type  = "SecureString"
+  value = random_password.oauth_state.result
+}
+
+# The Neon URLs, the Discord webhooks and the Google client secret are written by `make db-secrets` /
+# `make discord-secrets` / `make google-secrets` (never by Terraform, so they stay out of its state and plans). The Lambda
+# may read all of these (api_secrets below) and reads them all at boot (apps/api/src/ssm-secrets.ts). CI reads only the
 # direct URL.
 locals {
   api_secret_arns = [
     for name in [
       "database-url", "jwt-access-secret", "jwt-refresh-secret",
       "discord-alerts-webhook", "discord-contact-webhook", "discord-visits-webhook",
+      "google-client-secret", "oauth-state-secret",
     ] :
     "arn:aws:ssm:us-east-1:${local.account_id}:parameter${local.ssm_prefix}/${name}"
   ]
@@ -139,6 +152,7 @@ resource "aws_lambda_function" "api" {
       STORAGE_DRIVER     = "s3"
       S3_BUCKET          = aws_s3_bucket.this["uploads"].id
       UPLOADS_PUBLIC_URL = "https://${var.domain}/uploads"
+      GOOGLE_CLIENT_ID   = var.google_client_id # public (it goes in every Google URL); its secret is in SSM
     }
   }
 

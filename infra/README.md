@@ -72,6 +72,10 @@ numéricos do repositório — públicos, em `https://api.github.com/repos/<dono
 Repositórios criados depois de 15/07/2026 identificam-se para a AWS (OIDC) com esses IDs imutáveis: um repositório
 apagado e recriado com o mesmo nome não herda a confiança.
 
+Preencha também `google_client_id`, o client ID do cliente OAuth de produção do Login com Google (redirect URI
+`https://<domínio>/api/auth/google/callback`). O client secret vai para o SSM com `make google-secrets`, depois do
+primeiro apply: a API não sobe sem ele.
+
 ### 5. DNS primeiro
 Os certificados só validam depois que o domínio aponta para o Route 53, e o repositório de imagens precisa existir
 antes da Lambda. Crie só esses dois recursos:
@@ -156,6 +160,7 @@ na conta, guardada por 1 ano).
 | Testar um alarme de ponta a ponta | `make aws ARGS="cloudwatch set-alarm-state --region us-east-1 --alarm-name <alarme> --state-value ALARM --state-reason teste"` e depois o mesmo com `OK` (a volta não avisa). **Nunca** com `portfolio-prod-api-compute-runaway`: ele desliga a API |
 | Trocar credenciais do banco | `make db-secrets` e depois `make api-restart` (a Lambda lê os segredos do SSM só ao iniciar) |
 | Trocar um webhook do Discord | criar o webhook novo no canal, `make discord-secrets` (em branco mantém a URL atual), `make api-restart` e apagar o antigo no Discord (o repassador de Alertas lê a URL a cada Alerta) |
+| Trocar o client secret do Google | criar um secret novo no cliente OAuth de produção (o Google mantém os dois ativos), `make google-secrets`, `make api-restart` e apagar o antigo no Google |
 | Deploy manual da API (fallback) | `make api-publish` e `make aws ARGS='lambda update-function-code --function-name <nome> --image-uri <uri>'` — não roda migrations: se o código tiver migration nova, prefira o workflow |
 | Religar a API após o disjuntor de custo | investigar o gasto, depois `make api-enable` |
 | Checar produção | `make smoke DOMAIN=<dominio>` |

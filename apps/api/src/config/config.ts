@@ -32,8 +32,8 @@ const schema = z
     DISCORD_CONTACT_WEBHOOK_URL: z.url().optional(),
     DISCORD_ALERTS_WEBHOOK_URL: z.url().optional(),
     DISCORD_VISITS_WEBHOOK_URL: z.url().optional(),
-    /** Login com Google (ADR 0002). Optional for now: without all three, the Google button leads to the generic error.
-     * Dev uses its own OAuth client (redirect on localhost), never production's. */
+    /** Login com Google (ADR 0002). Required in production (the client ID from Terraform, the secrets from SSM); outside
+     * it, without all three, the Google button leads to the generic error. Dev uses its own OAuth client, never production's. */
     GOOGLE_CLIENT_ID: z.string().min(1).optional(),
     GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
     /** Key of the cookie that holds a Login pelo Google in progress (AES-256-GCM): a secret of its own. */
@@ -53,8 +53,15 @@ const schema = z
   })
   .superRefine((c, ctx) => {
     if (c.NODE_ENV !== 'production') return;
-    const webhooks = ['DISCORD_CONTACT_WEBHOOK_URL', 'DISCORD_ALERTS_WEBHOOK_URL', 'DISCORD_VISITS_WEBHOOK_URL'] as const;
-    for (const key of webhooks) {
+    const required = [
+      'DISCORD_CONTACT_WEBHOOK_URL',
+      'DISCORD_ALERTS_WEBHOOK_URL',
+      'DISCORD_VISITS_WEBHOOK_URL',
+      'GOOGLE_CLIENT_ID',
+      'GOOGLE_CLIENT_SECRET',
+      'OAUTH_STATE_SECRET',
+    ] as const;
+    for (const key of required) {
       if (!c[key]) ctx.addIssue({ code: 'custom', message: 'required in production', path: [key] });
     }
   })
