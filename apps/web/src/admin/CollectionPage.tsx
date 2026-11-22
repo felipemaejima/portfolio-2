@@ -79,17 +79,27 @@ export function CollectionPage({ collection }: { collection: Collection }) {
     setPending((ids) => ids.filter((pendingId) => pendingId !== id));
   };
 
+  // Reorders go out one at a time, in the order they were made: each sends the whole list, so the last one must land last.
+  const reorders = useRef<Promise<unknown>>(Promise.resolve());
+
   /**
    * Show/hide and reorder: the list changes at once, then is saved. If saving fails, it goes back to what the API has
-   * (also right when another change landed meanwhile), or to `before` when the API can't be reached.
-   * ponytail: reorders started from two rows at once may reach the API out of order; queue them if that ever shows.
+   * (also right when another change landed meanwhile), or to `before` when the API can't be reached. What the API has
+   * is read after the reorders already queued land, or one still on its way would be undone on screen only.
    */
   const change = (id: string, next: Item[], request: () => Promise<unknown>, before = items) => {
     setItems(next);
-    void saveRow(id, request, async () => setItems(await fetchItems().catch(() => before)));
+    void saveRow(id, request, async () => {
+      await reorders.current;
+      setItems(await fetchItems().catch(() => before));
+    });
   };
 
-  const reorder = (list: Item[]) => () => api(`${base}/reorder`, { method: 'PATCH', json: { ids: list.map((item) => item.id) }, auth: true });
+  const reorder = (list: Item[]) => () => {
+    const request = reorders.current.then(() => api(`${base}/reorder`, { method: 'PATCH', json: { ids: list.map((item) => item.id) }, auth: true }));
+    reorders.current = request.catch(() => {}); // the next one goes either way: a failure is handled by its own change()
+    return request;
+  };
 
   const move = (list: Item[], index: number, offset: number) => {
     const next = [...list];
@@ -104,10 +114,13 @@ export function CollectionPage({ collection }: { collection: Collection }) {
       () => api(`${base}/${item.id}`, { method: 'PATCH', json: { visible: !item.visible }, auth: true }),
     );
 
-  const remove = (item: Item) =>
+  // The dialog opens once the warning is known (a category counts its skills first).
+  const remove = async (item: Item) =>
     ask({
       title: `Excluir ${collection.item}?`,
-      message: [`Esta ação exclui “${collection.summary(item)}” permanentemente.`, collection.deleteWarning].filter(Boolean).join(' '),
+      message: [`Esta ação exclui “${(collection.name ?? collection.summary)(item)}” permanentemente.`, await collection.deleteWarning?.(item)]
+        .filter(Boolean)
+        .join(' '),
       confirm: 'Excluir',
       onConfirm: () =>
         void saveRow(item.id, async () => {
@@ -310,7 +323,7 @@ export function CollectionPage({ collection }: { collection: Collection }) {
                   <button type="button" className="button button-small" onClick={() => openForm(item)}>
                     Editar
                   </button>
-                  <button type="button" className="button button-small button-danger" disabled={busy} onClick={() => remove(item)}>
+                  <button type="button" className="button button-small button-danger" disabled={busy} onClick={() => void remove(item)}>
                     Excluir
                   </button>
                 </div>
