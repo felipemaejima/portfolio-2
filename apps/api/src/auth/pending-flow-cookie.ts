@@ -1,8 +1,13 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 import type { GoogleChecks } from './google.provider';
 
-/** A Login pelo Google attempt between its start and Google's callback. */
-export type PendingFlow = { intent: 'login' } & GoogleChecks;
+/**
+ * What the trip to Google is for: a Login, or linking the Google account to the admin who started it (from the Conta
+ * page). A link carries the admin's tokenVersion: a logout or password change meanwhile makes it fail.
+ */
+export type PendingIntent = { intent: 'login' } | { intent: 'vincular'; adminId: string; tokenVersion: number };
+/** A Login pelo Google attempt, or a link, between its start and Google's callback. */
+export type PendingFlow = PendingIntent & GoogleChecks;
 
 export const PENDING_FLOW_TTL_MS = 10 * 60 * 1000;
 

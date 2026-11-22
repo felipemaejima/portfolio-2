@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { api, refreshSession } from '../lib/api';
@@ -58,7 +58,7 @@ it.each([
   vi.mocked(refreshSession).mockResolvedValue(false);
   const router = openAdmin(`/admin?google=${failure}`);
   expect((await screen.findByRole('alert')).textContent).toBe(message);
-  expect(router.state.location.search).toBe('');
+  await waitFor(() => expect(router.state.location.search).toBe('')); // taken off by an effect, after the render
 });
 
 it('says nothing when the admin cancelled on Google', async () => {
@@ -66,5 +66,5 @@ it('says nothing when the admin cancelled on Google', async () => {
   const router = openAdmin('/admin?google=cancelado');
   await screen.findByRole('button', { name: 'Entrar' });
   expect(screen.queryByRole('alert')).toBeNull();
-  expect(router.state.location.search).toBe('');
+  await waitFor(() => expect(router.state.location.search).toBe('')); // taken off by an effect, after the render
 });

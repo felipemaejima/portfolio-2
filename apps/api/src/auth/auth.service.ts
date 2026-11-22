@@ -1,9 +1,9 @@
-import { BadRequestException, ForbiddenException, Inject, Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
 import { randomUUID } from 'node:crypto';
 import { CONFIG, type Config } from '../config/config';
-import type { Admin } from '../generated/prisma/client';
+import { Prisma, type Admin } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import type { GoogleAccount } from './google.provider';
 
@@ -67,12 +67,56 @@ export class AuthService {
   async changePassword(adminId: string, currentPassword: string, newPassword: string) {
     const minLength = this.config.PASSWORD_MIN_LENGTH;
     if (newPassword.length < minLength) throw new BadRequestException(`newPassword must be at least ${minLength} characters`);
-    const admin = await this.prisma.admin.findUniqueOrThrow({ where: { id: adminId } });
-    if (!(await argon2.verify(admin.passwordHash, currentPassword))) throw new ForbiddenException('Invalid current password');
+    await this.verifyCurrentPassword(adminId, currentPassword);
     await this.prisma.admin.update({
       where: { id: adminId },
       data: { passwordHash: await argon2.hash(newPassword), tokenVersion: { increment: 1 } },
     });
+  }
+
+  /** The admin's Conta vinculada Google; 404 without one. */
+  googleAccount(adminId: string) {
+    return this.prisma.linkedAccount.findUniqueOrThrow({ where: { adminId_provider: { adminId, provider: 'GOOGLE' } } });
+  }
+
+  /** The Admin about to link a Google account: current password confirmed (403), none linked yet (409). */
+  async authorizeGoogleLink(adminId: string, currentPassword: string) {
+    const admin = await this.verifyCurrentPassword(adminId, currentPassword);
+    const linked = await this.prisma.linkedAccount.count({ where: { adminId, provider: 'GOOGLE' } });
+    if (linked) throw new ConflictException('A Google account is already linked');
+    return admin;
+  }
+
+  /**
+   * Links the Google account in one statement, or returns false: when the admin's sessions changed since the link
+   * started (a logout or password change wins) or either side is already linked (the unique keys).
+   */
+  async linkGoogleAccount(adminId: string, tokenVersion: number, { subject, email }: GoogleAccount) {
+    try {
+      await this.prisma.admin.update({
+        where: { id: adminId, tokenVersion },
+        data: { linkedAccounts: { create: { provider: 'GOOGLE', subject, email } } },
+      });
+      return true;
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && ['P2025', 'P2002'].includes(error.code)) return false;
+      throw error;
+    }
+  }
+
+  /** Unlinks and ends every session (404 without a link): whoever got in through that account loses access now. */
+  async unlinkGoogleAccount(adminId: string) {
+    const [unlinked] = await this.prisma.$transaction([
+      this.prisma.linkedAccount.delete({ where: { adminId_provider: { adminId, provider: 'GOOGLE' } } }),
+      this.prisma.admin.update({ where: { id: adminId }, data: { tokenVersion: { increment: 1 } } }),
+    ]);
+    return unlinked;
+  }
+
+  private async verifyCurrentPassword(adminId: string, currentPassword: string) {
+    const admin = await this.prisma.admin.findUniqueOrThrow({ where: { id: adminId } });
+    if (!(await argon2.verify(admin.passwordHash, currentPassword))) throw new ForbiddenException('Invalid current password');
+    return admin;
   }
 
   async issueTokens(admin: Admin) {
