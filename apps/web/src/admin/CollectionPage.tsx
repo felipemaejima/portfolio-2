@@ -1,14 +1,11 @@
 import { useCallback, useEffect, useRef, useState, type DragEvent, type FormEvent } from 'react';
-import { createPortal } from 'react-dom';
-import { useBlocker } from 'react-router';
 import { api } from '../lib/api';
 import type { Collection } from './collections';
+import { useConfirmation, useToasts } from './feedback';
 import { FieldInput, missingEnglish, toFormValues, toPayload, useSaveShortcut } from './fields';
 
 type Item = Record<string, unknown> & { id: string; visible: boolean };
 type Values = Record<string, unknown>;
-/** A question in the confirmation dialog (delete, discard changes). `onCancel`: on its cancel button and Esc. */
-type Confirmation = { title: string; message: string; confirm: string; cancel?: string; onConfirm: () => void; onCancel?: () => void };
 const refuseFiles = (event: DragEvent) => {
   if (event.dataTransfer.types.includes('Files')) event.preventDefault();
 };
@@ -25,12 +22,8 @@ export function CollectionPage({ collection }: { collection: Collection }) {
   // Rows with a change being saved: a spinner on each, and their actions wait for it.
   const [pending, setPending] = useState<string[]>([]);
   const [dragId, setDragId] = useState<string | null>(null);
-  const [toasts, setToasts] = useState<{ id: number; text: string; error?: boolean }[]>([]);
-  const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const itemsBeforeDrag = useRef<Item[]>([]);
-  const lastToast = useRef(0);
   const dialogRef = useRef<HTMLDialogElement>(null);
-  const confirmRef = useRef<HTMLDialogElement>(null);
   const submitRef = useRef<HTMLButtonElement>(null);
 
   const base = `/admin/${collection.path}`;
@@ -45,13 +38,7 @@ export function CollectionPage({ collection }: { collection: Collection }) {
   }, [fetchItems]);
   useEffect(load, [load]);
 
-  /** A toast: a success one goes away by itself, an error one stays until closed. */
-  const dismiss = (id: number) => setToasts((list) => list.filter((toast) => toast.id !== id));
-  const notify = (text: string, error = false) => {
-    const id = ++lastToast.current;
-    setToasts((list) => [...list, { id, text, error }]);
-    if (!error) setTimeout(() => dismiss(id), 4000);
-  };
+  const { notify, toasts } = useToasts();
 
   // The form lives in a native modal <dialog>: opened while `editing` is set (focus trap and backdrop for free).
   const isEditing = editing !== null;
@@ -71,31 +58,7 @@ export function CollectionPage({ collection }: { collection: Collection }) {
     if (!isEditing && dialog.open) dialog.close();
   }, [isEditing]);
   useSaveShortcut(submitRef, isEditing);
-  // Reloading or closing the tab with unsaved changes: the browser asks first.
-  useEffect(() => {
-    if (!dirty) return;
-    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
-    addEventListener('beforeunload', warn);
-    return () => removeEventListener('beforeunload', warn);
-  }, [dirty]);
-
-  // The confirmation dialog stays rendered after closing (for its exit), until the next question replaces it.
-  useEffect(() => {
-    if (confirmation) confirmRef.current?.showModal(); // focuses its first button: the safe choice
-  }, [confirmation]);
-
-  const askDiscard = (onConfirm: () => void, onCancel?: () => void) =>
-    setConfirmation({
-      title: 'Descartar alterações?',
-      message: 'O que você mudou neste formulário ainda não foi salvo.',
-      confirm: 'Descartar',
-      cancel: 'Continuar editando',
-      onConfirm,
-      onCancel,
-    });
-  // Back or a link with unsaved changes: the router holds the navigation while the same question is asked (once per hold).
-  const blocker = useBlocker(dirty);
-  if (blocker.state === 'blocked' && confirmation?.onConfirm !== blocker.proceed) askDiscard(blocker.proceed, blocker.reset);
+  const { ask, askDiscard, dialog } = useConfirmation(dirty);
 
   /** ✕, Cancelar and Esc: nothing while saving or uploading; with unsaved changes, asks first. */
   const closeForm = () => {
@@ -142,7 +105,7 @@ export function CollectionPage({ collection }: { collection: Collection }) {
     );
 
   const remove = (item: Item) =>
-    setConfirmation({
+    ask({
       title: `Excluir ${collection.item}?`,
       message: [`Esta ação exclui “${collection.summary(item)}” permanentemente.`, collection.deleteWarning].filter(Boolean).join(' '),
       confirm: 'Excluir',
@@ -264,61 +227,8 @@ export function CollectionPage({ collection }: { collection: Collection }) {
         )}
       </dialog>
 
-      <dialog
-        ref={confirmRef}
-        className="modal confirm"
-        role="alertdialog"
-        aria-labelledby="confirm-title"
-        aria-describedby="confirm-message"
-        onCancel={() => confirmation?.onCancel?.()}
-      >
-        {confirmation && (
-          <div className="form">
-            <h2 id="confirm-title">{confirmation.title}</h2>
-            <p id="confirm-message">{confirmation.message}</p>
-            <div className="actions">
-              <button
-                type="button"
-                className="button"
-                onClick={() => {
-                  confirmRef.current?.close();
-                  confirmation.onCancel?.();
-                }}
-              >
-                {confirmation.cancel ?? 'Cancelar'}
-              </button>
-              <button
-                type="button"
-                className="button button-danger"
-                onClick={() => {
-                  confirmRef.current?.close();
-                  confirmation.onConfirm();
-                }}
-              >
-                {confirmation.confirm}
-              </button>
-            </div>
-          </div>
-        )}
-      </dialog>
-
-      {/* Mounted before any toast, so screen readers announce what comes in; errors as alerts. In <body>: fixed to the
-          viewport, whatever the admin's boxes contain. */}
-      {createPortal(
-        <div className="toasts" aria-live="polite">
-          {toasts.map((toast) => (
-            <div key={toast.id} className={toast.error ? 'toast toast-error' : 'toast'} role={toast.error ? 'alert' : undefined}>
-              <p>{toast.text}</p>
-              {toast.error && (
-                <button type="button" className="button button-small" aria-label="Fechar aviso" onClick={() => dismiss(toast.id)}>
-                  ✕
-                </button>
-              )}
-            </div>
-          ))}
-        </div>,
-        document.body,
-      )}
+      {dialog}
+      {toasts}
 
       {!items ? (
         loadError ? (

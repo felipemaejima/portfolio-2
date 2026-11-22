@@ -301,7 +301,6 @@ main.section > h1 { font-size: 32px; margin-bottom: 24px; }
   background: var(--color-surface-2); border-top: 1px solid var(--color-divider); border-radius: 0 0 12px 12px;
 }
 .admin-main .form-footer { bottom: 0; }
-.form-footer p { margin: 0; }
 
 /* Wide admin forms: two columns. Short fields (labels and single-line PT/EN pairs) take one; texts, lists and images span both. */
 @container (min-width: 760px) {
@@ -311,7 +310,7 @@ main.section > h1 { font-size: 32px; margin-bottom: 24px; }
 }
 .admin-form > .button { align-self: flex-start; }
 .load-error { align-items: center; }
-/* Admin toasts (CollectionPage): bottom right, over the page; errors stay until closed. */
+/* Admin toasts (Perfil and collections): bottom right, over the page; errors stay until closed. */
 .toasts {
   position: fixed; z-index: 20; right: 24px; bottom: 24px; width: min(380px, calc(100vw - 32px));
   display: flex; flex-direction: column; gap: 8px;
