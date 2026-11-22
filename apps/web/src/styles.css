@@ -213,6 +213,35 @@ html:has(.site-header) { scroll-padding-top: var(--header-height); }
 .project-modal-image { width: 100%; max-height: 360px; object-fit: cover; }
 .project-modal-body { padding: 24px; display: flex; flex-direction: column; gap: 18px; }
 .project-description { margin: 0; white-space: pre-line; }
+
+/* Projetos em destaque (FeaturedProjects). One or two: still, centred. Three or more: a carousel whose slides share one
+   grid cell (the tallest sets the height), each moved by its distance to the projeto em foco (data-pos, −2 to 2): that
+   one full size with an accent glow, its neighbours smaller and faded, the rest just outside, unseen. A step of 94% of a
+   card is half of it plus half a neighbour (0.88): the gap between them stays --gap. Desktop: three in view, sized to
+   fill the width; phones: one at 80%, the neighbours' edges showing. */
+.featured { overflow-x: clip; } /* the slides out of view (on phones, the neighbours too) reach past the page's edges */
+.featured-still { display: flex; flex-wrap: wrap; justify-content: center; gap: 24px; }
+.featured-still > * { flex: 0 1 420px; }
+.carousel { --gap: 24px; }
+.carousel-controls { display: flex; align-items: center; gap: 8px; margin-bottom: 28px; }
+.carousel-controls .button { width: 44px; height: 44px; padding: 0; }
+.carousel-counter { margin: 0; font-size: 14px; color: var(--color-neutral-400); font-variant-numeric: tabular-nums; }
+.carousel-progress { flex: 1; height: 2px; margin: 0 16px; border-radius: 1px; background: var(--color-divider); overflow: hidden; }
+.carousel-progress::after { content: ''; display: block; height: 100%; background: var(--color-accent); transform: scaleX(0); transform-origin: left; }
+.carousel-track { display: grid; grid-template-columns: minmax(0, 1fr); touch-action: pan-y; }
+.slide {
+  grid-area: 1 / 1; justify-self: center; display: grid; width: min(460px, calc((100% - 2 * var(--gap)) / 2.76));
+  transform: translateX(calc(var(--pos) * (94% + var(--gap)))) scale(0.88); opacity: 0;
+}
+.slide[data-pos='-2'] { --pos: -2; }
+.slide[data-pos='-1'] { --pos: -1; opacity: 0.5; }
+.slide[data-pos='1'] { --pos: 1; opacity: 0.5; }
+.slide[data-pos='2'] { --pos: 2; }
+.slide[data-pos='0'] { z-index: 1; transform: none; opacity: 1; }
+.slide:not([data-pos='0']):hover { opacity: 0.75; }
+.slide[data-pos='0'] .project-card {
+  border-color: var(--color-accent); box-shadow: 0 0 48px -12px color-mix(in srgb, var(--color-accent) 60%, transparent);
+}
 .service { padding: 22px; }
 .service h3 { margin-bottom: 8px; font-size: 15px; }
 
@@ -442,6 +471,8 @@ main.section > h1 { font-size: 32px; margin-bottom: 24px; }
   .trajectory { display: block; }
   .trajectory > div + div { margin-top: 56px; }
   .about-photo { --cut: 56px; height: auto; max-width: 440px; aspect-ratio: 4 / 5; }
+  .carousel { --gap: 12px; }
+  .slide { width: 80%; }
   .opening { font-size: 24px; }
   /* Admin: a sticky top bar (brand, Sair, theme, menu button); the menu opens as a drawer below it. Block, not grid: a grid
      item would only stick within its own row. */
@@ -503,6 +534,7 @@ main.section > h1 { font-size: 32px; margin-bottom: 24px; }
 @keyframes logo-echo-in { from { opacity: 0; transform: translate(0, 0); } }
 @keyframes logo-float { 50% { transform: translate(24px, 17px); } }
 @keyframes shake { 20%, 60% { transform: translateX(-4px); } 40%, 80% { transform: translateX(4px); } }
+@keyframes progress { to { transform: scaleX(1); } }
 /* 142% of a circle's reference radius is the viewport's diagonal: the circle covers it from any point. */
 @keyframes reveal {
   from { clip-path: circle(0 at var(--reveal-x) var(--reveal-y)); }
@@ -531,6 +563,11 @@ main.section > h1 { font-size: 32px; margin-bottom: 24px; }
   }
   /* Newly loaded project cards (filters, pages). */
   .fade-items > * { animation: rise 0.45s ease-out both; }
+  /* Projetos em destaque: the slides glide to their places; the progress bar fills over the 5s interval (FeaturedProjects),
+     frozen while the carousel waits. */
+  .slide { transition: transform 0.6s cubic-bezier(0.2, 0.7, 0.2, 1), opacity 0.6s; }
+  .carousel-progress::after { animation: progress 5s linear both; }
+  .carousel-progress.paused::after { animation-play-state: paused; }
   html:has(.site-header) { scroll-behavior: smooth; }
   /* Dialogs and the phone menus ease in from a closed pose and back out to it. Where `overlay` transitions they stay
      shown, in the top layer, until the exit ends; elsewhere (no overlay) they'd jump out of the top layer mid-fade, so

@@ -19,6 +19,8 @@ const STRINGS = {
     newest: 'Mais recentes', manualOrder: 'Ordem do autor', noProjects: 'Nenhum projeto encontrado.', previous: 'Anterior',
     next: 'Próxima', back: 'Voltar', photo: 'foto', close: 'Fechar', themeLight: 'Usar tema claro', themeDark: 'Usar tema escuro',
     copyEmail: 'Copiar e-mail', copyLink: 'Copiar link do {label}', copied: 'Copiado', messageSent: 'Mensagem enviada. Obrigado!',
+    featuredProjects: 'Projetos em destaque', carousel: 'carrossel', slide: 'slide', slideOf: '{n} de {total}',
+    previousProject: 'Projeto anterior', nextProject: 'Próximo projeto', pause: 'Pausar', resume: 'Retomar',
   },
   en: {
     about: 'About', projects: 'Projects', skills: 'Skills', experience: 'Background', education: 'Education',
@@ -35,6 +37,8 @@ const STRINGS = {
     newest: 'Newest', manualOrder: "Author's order", noProjects: 'No projects found.', previous: 'Previous',
     next: 'Next', back: 'Back', photo: 'photo', close: 'Close', themeLight: 'Use light theme', themeDark: 'Use dark theme',
     copyEmail: 'Copy e-mail', copyLink: 'Copy {label} link', copied: 'Copied', messageSent: 'Message sent. Thank you!',
+    featuredProjects: 'Featured projects', carousel: 'carousel', slide: 'slide', slideOf: '{n} of {total}',
+    previousProject: 'Previous project', nextProject: 'Next project', pause: 'Pause', resume: 'Resume',
   },
 } as const;
 
