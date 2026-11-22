@@ -175,11 +175,43 @@ it('saves the open form with Ctrl+S instead of saving the page', async () => {
   expect(mockApi).toHaveBeenCalledWith('/admin/projects', expect.objectContaining({ method: 'POST' }));
 });
 
-it('names what a delete takes along; success toasts go away by themselves, error ones stay until closed', async () => {
-  const categories = [
-    { id: 'c1', name: { pt: 'Back-end' }, visible: true },
-    { id: 'c2', name: { pt: 'Front-end' }, visible: true },
-  ];
+it('names a featured project without its ★ when deleting it; the list keeps the ★', async () => {
+  mockApi.mockImplementation(async () => [{ ...project, featured: true }]);
+  renderPage();
+  await settle();
+  expect(screen.getByRole('listitem').textContent).toContain('Site ★');
+
+  fireEvent.click(action('Excluir'));
+  await settle();
+  expect(confirmDialog().textContent).toContain('Esta ação exclui “Site” permanentemente.');
+});
+
+const categories = [
+  { id: 'c1', name: { pt: 'Back-end' }, visible: true },
+  { id: 'c2', name: { pt: 'Front-end' }, visible: true },
+];
+
+it.each([
+  ['no skills', async () => [], 'Esta ação exclui “Back-end” permanentemente.'],
+  ['one skill', async () => [{}], 'Esta ação exclui “Back-end” permanentemente. A única habilidade desta categoria também será excluída.'],
+  ['3 skills', async () => [{}, {}, {}], 'Esta ação exclui “Back-end” permanentemente. As 3 habilidades desta categoria também serão excluídas.'],
+  [
+    'skills it could not count',
+    async () => Promise.reject(new Error('Sem conexão.')),
+    'Esta ação exclui “Back-end” permanentemente. As habilidades desta categoria também serão excluídas.',
+  ],
+])('deleting a category with %s says so', async (_, skills, message) => {
+  mockApi.mockImplementation(async (path) => (path === '/admin/skills?categoryId=c1' ? skills() : categories));
+  renderPage('skill-categories');
+  await settle();
+
+  fireEvent.click(action('Excluir', screen.getAllByRole('listitem')[0]));
+  await settle();
+  expect(confirmDialog().open).toBe(true);
+  expect(within(confirmDialog()).getByText(/^Esta ação/).textContent).toBe(message);
+});
+
+it('success toasts go away by themselves, error ones stay until closed', async () => {
   mockApi.mockImplementation(async (path, options) => {
     if (options?.method === 'PATCH') throw new Error('Sem conexão.');
     return options?.method ? undefined : categories;
@@ -189,8 +221,7 @@ it('names what a delete takes along; success toasts go away by themselves, error
   const [backEnd, frontEnd] = screen.getAllByRole('listitem');
 
   fireEvent.click(action('Excluir', backEnd));
-  expect(confirmDialog().textContent).toContain('“Back-end”');
-  expect(confirmDialog().textContent).toContain('As habilidades desta categoria também serão excluídas.');
+  await settle();
   fireEvent.click(within(confirmDialog()).getByRole('button', { name: 'Excluir' }));
   await settle();
   expect(screen.getByText('Item excluído.')).toBeDefined();
@@ -204,4 +235,68 @@ it('names what a delete takes along; success toasts go away by themselves, error
 
   fireEvent.click(screen.getByRole('button', { name: 'Fechar aviso' }));
   expect(screen.queryByRole('alert')).toBeNull();
+});
+
+/** Three services and a fake API for their order: each reorder waits for its own `deferred()`, then is what the list gives. */
+const reorderingServices = () => {
+  const services = ['Um', 'Dois', 'Três'].map((pt, i) => ({ id: `s${i + 1}`, title: { pt }, description: { pt }, visible: true }));
+  let saved = services;
+  const sent: string[][] = [];
+  const replies = [deferred(), deferred()];
+  mockApi.mockImplementation(async (path, options) => {
+    if (!options?.method) return saved;
+    const { ids } = options.json as { ids: string[] };
+    sent.push(ids);
+    await replies[sent.length - 1].promise;
+    saved = ids.map((id) => services.find((s) => s.id === id)!);
+  });
+  return { sent, replies };
+};
+const rowOrder = () => screen.getAllByRole('button', { name: /^Ações: / }).map((b) => b.getAttribute('aria-label')!.slice('Ações: '.length));
+/** Two reorders in a row, from different rows: Um goes down, then Três goes up. */
+const reorderTwice = async () => {
+  renderPage('services');
+  await settle();
+  fireEvent.click(action('Descer', screen.getAllByRole('listitem')[0]));
+  fireEvent.click(action('Subir', screen.getAllByRole('listitem')[2]));
+  await settle();
+};
+
+it('sends a second reorder only after the first one is done', async () => {
+  const { sent, replies } = reorderingServices();
+  await reorderTwice();
+  expect(rowOrder()).toEqual(['Dois', 'Três', 'Um']);
+  expect(sent).toEqual([['s2', 's1', 's3']]);
+
+  replies[0].resolve(undefined);
+  await settle();
+  expect(sent).toEqual([
+    ['s2', 's1', 's3'],
+    ['s2', 's3', 's1'],
+  ]);
+});
+
+it('when a reorder fails, the list goes back to what the API has once the reorders queued behind it are done', async () => {
+  const { replies } = reorderingServices();
+  await reorderTwice();
+
+  replies[0].reject(new Error('Sem conexão.'));
+  await settle();
+  expect(screen.getByRole('alert').textContent).toContain('Sem conexão.');
+
+  replies[1].resolve(undefined);
+  await settle();
+  expect(rowOrder()).toEqual(['Dois', 'Três', 'Um']); // the second one sent the whole list, its move included
+});
+
+it('when the only reorder fails, the list goes back to the order it had', async () => {
+  const { replies } = reorderingServices();
+  renderPage('services');
+  await settle();
+  fireEvent.click(action('Descer', screen.getAllByRole('listitem')[0]));
+  expect(rowOrder()).toEqual(['Dois', 'Um', 'Três']);
+
+  replies[0].reject(new Error('Sem conexão.'));
+  await settle();
+  expect(rowOrder()).toEqual(['Um', 'Dois', 'Três']);
 });
