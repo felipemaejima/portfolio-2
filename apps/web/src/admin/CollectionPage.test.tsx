@@ -92,6 +92,18 @@ it('keeps what was typed while an image uploads, and locks save and cancel until
   expect(buttons()).toEqual([false, false]);
 });
 
+it('picks an image through the "Escolher imagem" button and shows it once uploaded', async () => {
+  mockApi.mockImplementation(async (path, options) =>
+    path === '/admin/uploads' ? { id: 'media-1', url: '/uploads/media-1.webp' } : !options?.method ? [project] : undefined,
+  );
+  await openNewProject();
+
+  fireEvent.change(within(openDialog()).getByLabelText('Escolher imagem'), { target: { files: [new File(['x'], 'a.png', { type: 'image/png' })] } });
+  await settle();
+  expect(mockApi).toHaveBeenCalledWith('/admin/uploads', expect.objectContaining({ method: 'POST' }));
+  expect(openDialog().querySelector('img')).toHaveProperty('src', expect.stringContaining('/uploads/media-1.webp'));
+});
+
 it('shows a hidden item at once, and puts it back with an error toast when saving fails', async () => {
   const saving = deferred();
   mockApi.mockImplementation(async (path, options) => (options?.method === 'PATCH' ? saving.promise : [project]));
