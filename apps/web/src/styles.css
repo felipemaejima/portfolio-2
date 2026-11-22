@@ -34,13 +34,14 @@ a { color: inherit; }
 img { max-width: 100%; display: block; }
 h1, h2, h3 { font-weight: 500; letter-spacing: -0.01em; margin: 0; }
 h1 { font-size: 56px; line-height: 1.08; letter-spacing: -0.02em; }
-h2 { font-size: 28px; margin-bottom: 24px; }
+h2 { font-size: 40px; line-height: 1.15; margin-bottom: 24px; }
 h3 { font-size: 16px; }
 :focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 
 .muted { color: var(--color-neutral-400); font-size: 13px; margin: 0; }
 .body-text { color: var(--color-neutral-300); font-size: 15px; line-height: 1.7; }
-.eyebrow { font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--color-accent-300); margin: 0 0 12px; }
+/* Labels (the hero's role, skill categories): small, plain text in the neutral color. */
+.eyebrow { font-size: 14px; color: var(--color-neutral-400); margin: 0 0 12px; }
 .subtitle { font-size: 13px; color: var(--color-accent-300); margin: 2px 0 8px; }
 .status { padding: 72px var(--gutter); color: var(--color-neutral-400); }
 .center { text-align: center; margin-top: 28px; }
@@ -77,11 +78,12 @@ h3 { font-size: 16px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .actions { display: flex; gap: 12px; flex-wrap: wrap; }
 
-/* Header: stays on top, over a blurred view of the page; anchors land below it. */
+/* Header: stays on top, over a blurred view of the page; anchors land below it. Exactly --header-height tall (its border
+   included; no vertical padding, the min-height centres the row), which the full-screen hero and sections rely on too. */
 html:has(.site-header) { scroll-padding-top: var(--header-height); }
 .site-header {
   position: sticky; top: 0; z-index: 10; min-height: var(--header-height);
-  display: flex; align-items: center; gap: 28px; padding: 8px var(--gutter); border-bottom: 1px solid var(--color-divider);
+  display: flex; align-items: center; gap: 28px; padding: 0 var(--gutter); border-bottom: 1px solid var(--color-divider);
   background: color-mix(in srgb, var(--color-bg) 80%, transparent); backdrop-filter: blur(12px);
 }
 /* Reading progress, driven by the page scroll (no JS); where unsupported it just doesn't show. */
@@ -120,6 +122,11 @@ html:has(.site-header) { scroll-padding-top: var(--header-height); }
 
 /* Sections */
 .section { padding: 72px var(--gutter); border-top: 1px solid var(--color-divider); }
+/* Desktop: each home section fills the screen under the header, its content centred (align-content works on blocks too);
+   a taller one just grows. Scrolling stays free, no snap. Phones keep the natural height. */
+@media (width > 860px) {
+  section.section { min-height: calc(100svh - var(--header-height)); align-content: center; }
+}
 /* The hero fills the first screen: text left, the animated logo (HeroLogo) right, both centred vertically; on phones the
    logo sits small above the role. The logo is the last child, beside the five text rows. */
 .hero {
@@ -128,7 +135,6 @@ html:has(.site-header) { scroll-padding-top: var(--header-height); }
 }
 .hero > :not(.hero-logo) { grid-column: 1; }
 .hero h1 { margin-bottom: 24px; }
-.hero .eyebrow { font-size: 14px; letter-spacing: normal; text-transform: none; color: var(--color-neutral-400); }
 .hero-logo {
   grid-column: 2; grid-row: 1 / span 5; align-self: center; justify-self: center; width: min(100%, 440px);
   overflow: visible; /* the stroke, the echo and the slide-in reach past the letters */
@@ -161,6 +167,8 @@ html:has(.site-header) { scroll-padding-top: var(--header-height); }
 .grid { display: grid; gap: 24px; }
 .grid-3 { grid-template-columns: repeat(3, 1fr); }
 .grid-4 { grid-template-columns: repeat(4, 1fr); }
+/* As many columns as items fit (skill categories): none left empty. */
+.grid-fit { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
 
 .tags { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; padding: 0; margin: 0; }
 .tag { font-size: 12px; padding: 5px 12px; border-radius: 6px; background: var(--color-surface); }
@@ -390,6 +398,7 @@ main.section > h1 { font-size: 32px; margin-bottom: 24px; }
 @media (max-width: 860px) {
   :root { --gutter: 16px; }
   h1 { font-size: 38px; }
+  h2 { font-size: 30px; }
   .brand-name { display: none; }
   .hero { padding: 56px var(--gutter); grid-template-columns: minmax(0, 1fr); }
   .hero-logo { grid-column: 1; grid-row: auto; order: -1; justify-self: start; width: 120px; margin-bottom: 24px; }
@@ -398,7 +407,7 @@ main.section > h1 { font-size: 32px; margin-bottom: 24px; }
   .copy { width: 44px; height: 44px; }
   .channels { gap: 0; }
   .channels li { line-height: 44px; }
-  .about, .facts, .contact, .grid-3, .grid-4, .timeline > li, .localized { grid-template-columns: 1fr; }
+  .about, .facts, .contact, .grid-3, .grid-4, .grid-fit, .timeline > li, .localized { grid-template-columns: 1fr; }
   .about { gap: 24px; }
   /* Admin: a sticky top bar (brand, Sair, theme, menu button); the menu opens as a drawer below it. Block, not grid: a grid
      item would only stick within its own row. */
@@ -476,13 +485,14 @@ main.section > h1 { font-size: 32px; margin-bottom: 24px; }
   .hero-logo .f { animation: logo-in-f 0.9s cubic-bezier(0.2, 1.25, 0.4, 1) both; }
   .hero-logo .m { animation: logo-in-m 0.9s 0.12s cubic-bezier(0.2, 1.25, 0.4, 1) both; }
   .hero-logo .echo { animation: logo-echo-in 0.8s 0.8s ease-out both, logo-float 9s 1.6s ease-in-out infinite; }
-  /* Sections: driven by the scroll where supported; elsewhere they fade in once, when use-reveal.ts marks them. */
+  /* Sections: driven by the scroll where supported; elsewhere they fade in once, when use-reveal.ts marks them. What
+     moves is their content, not the section: a jump to #section measures the section, and would land 12px past its top. */
   @supports (animation-timeline: view()) {
-    [data-reveal] { animation: rise linear both; animation-timeline: view(); animation-range: entry 0% entry 160px; }
+    [data-reveal] > * { animation: rise linear both; animation-timeline: view(); animation-range: entry 0% entry 160px; }
   }
   @supports not (animation-timeline: view()) {
-    [data-reveal] { transition: opacity 0.6s ease-out, transform 0.6s cubic-bezier(0.2, 0.7, 0.2, 1); }
-    [data-reveal]:not(.revealed) { opacity: 0; transform: translateY(12px); }
+    [data-reveal] > * { transition: opacity 0.6s ease-out, transform 0.6s cubic-bezier(0.2, 0.7, 0.2, 1); }
+    [data-reveal]:not(.revealed) > * { opacity: 0; transform: translateY(12px); }
   }
   /* Newly loaded project cards (filters, pages). */
   .fade-items > * { animation: rise 0.45s ease-out both; }

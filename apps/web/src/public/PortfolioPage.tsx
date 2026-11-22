@@ -130,7 +130,7 @@ export function PortfolioPage() {
         {sections.includes('skills') && (
           <section id="skills" className="section" data-reveal>
             <h2>{t.skills}</h2>
-            <div className="grid grid-4">
+            <div className="grid grid-fit">
               {skills.map((category) => (
                 <div key={category.id}>
                   <p className="eyebrow">{category.name}</p>
