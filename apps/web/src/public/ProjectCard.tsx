@@ -1,4 +1,4 @@
-import { useRef, type RefObject } from 'react';
+import { useId, useRef, type RefObject } from 'react';
 import { useLang } from '../lib/i18n';
 import type { Project } from '../lib/types';
 
@@ -51,11 +51,13 @@ export function ProjectCard({ project }: { project: Project }) {
 
 function ProjectDialog({ project, dialogRef }: { project: Project; dialogRef: RefObject<HTMLDialogElement | null> }) {
   const { t } = useLang();
+  // Not the project's id: the home's carousel can show a project twice.
+  const titleId = useId();
   return (
     <dialog
       ref={dialogRef}
       className="modal project-modal"
-      aria-labelledby={`project-${project.id}`}
+      aria-labelledby={titleId}
       // A click on the backdrop lands on the <dialog> itself (its content fills the box): close it.
       onClick={(event) => event.target === event.currentTarget && event.currentTarget.close()}
     >
@@ -63,7 +65,7 @@ function ProjectDialog({ project, dialogRef }: { project: Project; dialogRef: Re
         {project.imageUrl && <img className="project-modal-image" src={project.imageUrl} alt="" />}
         <div className="project-modal-body">
           <div className="modal-header">
-            <h2 id={`project-${project.id}`}>{project.title}</h2>
+            <h2 id={titleId}>{project.title}</h2>
             <button type="button" className="button button-small" aria-label={t.close} onClick={() => dialogRef.current?.close()}>
               ✕
             </button>

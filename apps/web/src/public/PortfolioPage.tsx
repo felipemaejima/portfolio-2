@@ -8,8 +8,8 @@ import { useFetch } from '../lib/use-fetch';
 import { useReveal } from '../lib/use-reveal';
 import { announceVisit } from '../lib/visit';
 import { ContactForm } from './ContactForm';
+import { FeaturedProjects } from './FeaturedProjects';
 import { HeroLogo } from './HeroLogo';
-import { ProjectCard } from './ProjectCard';
 import { SiteHeader } from './SiteHeader';
 
 export function PortfolioPage() {
@@ -153,13 +153,9 @@ export function PortfolioPage() {
           </section>
         )}
 
-        <section id="projects" className="section" data-reveal>
+        <section id="projects" className="section featured" data-reveal>
           <h2>{t.projects}</h2>
-          <div className="grid grid-3">
-            {projects.map((project) => (
-              <ProjectCard key={project.id} project={project} />
-            ))}
-          </div>
+          <FeaturedProjects projects={projects} />
           <div className="center">
             <Link className="button button-accent" to="/projetos">
               {t.seeAllProjects}
