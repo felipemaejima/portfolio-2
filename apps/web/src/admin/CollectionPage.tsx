@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type DragEvent, type FormEvent } from 'react';
 import { api } from '../lib/api';
 import type { Collection } from './collections';
-import { useConfirmation, useToasts } from './feedback';
+import { isDirty, useConfirmation, useToasts, useUnsavedChangesGuard } from './feedback';
 import { FieldInput, missingEnglish, toFormValues, toPayload, useSaveShortcut } from './fields';
 
 type Item = Record<string, unknown> & { id: string; visible: boolean };
@@ -47,7 +47,7 @@ export function CollectionPage({ collection }: { collection: Collection }) {
   if (editing && editing !== lastEditing) setLastEditing(editing);
   const shown = editing ?? lastEditing;
   const locked = saving || uploading; // the form can't close mid-save or mid-upload
-  const dirty = editing !== null && JSON.stringify(editing.values) !== JSON.stringify(editing.initial);
+  const dirty = editing !== null && isDirty(editing.values, editing.initial);
   useEffect(() => {
     const dialog = dialogRef.current;
     if (!dialog) return;
@@ -58,7 +58,8 @@ export function CollectionPage({ collection }: { collection: Collection }) {
     if (!isEditing && dialog.open) dialog.close();
   }, [isEditing]);
   useSaveShortcut(submitRef, isEditing);
-  const { ask, askDiscard, dialog } = useConfirmation(dirty);
+  const { ask, askDiscard, dialog } = useConfirmation();
+  useUnsavedChangesGuard(dirty, askDiscard);
 
   /** ✕, Cancelar and Esc: nothing while saving or uploading; with unsaved changes, asks first. */
   const closeForm = () => {
@@ -118,7 +119,7 @@ export function CollectionPage({ collection }: { collection: Collection }) {
   const remove = async (item: Item) =>
     ask({
       title: `Excluir ${collection.item}?`,
-      message: [`Esta ação exclui “${(collection.name ?? collection.summary)(item)}” permanentemente.`, await collection.deleteWarning?.(item)]
+      message: [`Esta ação exclui “${(collection.deleteLabel ?? collection.summary)(item)}” permanentemente.`, await collection.deleteWarning?.(item)]
         .filter(Boolean)
         .join(' '),
       confirm: 'Excluir',

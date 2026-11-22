@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { ApiError, api } from '../lib/api';
 import { PROFILE_FIELDS } from './collections';
-import { useConfirmation, useToasts } from './feedback';
+import { isDirty, useConfirmation, useToasts, useUnsavedChangesGuard } from './feedback';
 import { FieldInput, toFormValues, toPayload, useSaveShortcut } from './fields';
 
 type Values = Record<string, unknown>;
@@ -16,7 +16,8 @@ export function ProfilePage() {
   const submitRef = useRef<HTMLButtonElement>(null);
   useSaveShortcut(submitRef);
   const { notify, toasts } = useToasts();
-  const { dialog } = useConfirmation(JSON.stringify(values) !== JSON.stringify(saved));
+  const { askDiscard, dialog } = useConfirmation();
+  useUnsavedChangesGuard(isDirty(values, saved), askDiscard);
 
   const load = useCallback(() => {
     const start = (values: Values) => {

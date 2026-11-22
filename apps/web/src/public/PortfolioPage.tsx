@@ -10,6 +10,7 @@ import { announceVisit } from '../lib/visit';
 import { ContactForm } from './ContactForm';
 import { FeaturedProjects } from './FeaturedProjects';
 import { HeroLogo } from './HeroLogo';
+import { LineIcon } from './LineIcon';
 import { SiteHeader } from './SiteHeader';
 
 export function PortfolioPage() {
@@ -46,7 +47,7 @@ export function PortfolioPage() {
   }
   const sections = visibleSections(data);
   const skills = skillCategories.filter((category) => category.skills.length > 0);
-  // Line icons from Lucide (ISC license): map pin, clock, laptop, globe. A fact left empty isn't listed.
+  // Line icons: map pin, clock, laptop, globe. A fact left empty isn't listed.
   const facts = (
     [
       [t.location, profile.location, <><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0" /><circle cx="12" cy="10" r="3" /></>],
@@ -118,9 +119,9 @@ export function PortfolioPage() {
                 {facts.map(([label, value, icon]) => (
                   <div key={label}>
                     <dt>
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <LineIcon size={20} strokeWidth={1.5}>
                         {icon}
-                      </svg>
+                      </LineIcon>
                       {label}
                     </dt>
                     <dd>
@@ -284,7 +285,7 @@ function CopyButton({ label, copied, onCopy }: { label: string; copied: boolean;
   if (!navigator.clipboard) return null;
   return (
     <button type="button" className={copied ? 'copy copied' : 'copy'} aria-label={label} title={label} onClick={onCopy}>
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <LineIcon size={15}>
         {copied ? (
           <path d="M20 6 9 17l-5-5" />
         ) : (
@@ -293,7 +294,7 @@ function CopyButton({ label, copied, onCopy }: { label: string; copied: boolean;
             <path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" />
           </>
         )}
-      </svg>
+      </LineIcon>
     </button>
   );
 }
