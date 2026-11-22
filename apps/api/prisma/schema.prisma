@@ -11,12 +11,32 @@ datasource db {
 // Json columns typed `LocalizedText` hold { pt: string, en?: string }.
 
 model Admin {
-  id           String   @id @default(uuid()) @db.Uuid
-  email        String   @unique
-  passwordHash String
-  tokenVersion Int      @default(0)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id             String          @id @default(uuid()) @db.Uuid
+  email          String          @unique
+  passwordHash   String
+  tokenVersion   Int             @default(0)
+  linkedAccounts LinkedAccount[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+}
+
+enum LinkedAccountProvider {
+  GOOGLE
+}
+
+// Conta vinculada (GLOSSARY.md): proves who the admin is, never grants access by itself (ADR 0002).
+model LinkedAccount {
+  id        String                @id @default(uuid()) @db.Uuid
+  adminId   String                @db.Uuid
+  admin     Admin                 @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  provider  LinkedAccountProvider
+  subject   String // the provider's stable id (Google: `sub`)
+  email     String // display only, refreshed on each Login: never decides who gets in
+  createdAt DateTime              @default(now())
+  updatedAt DateTime              @updatedAt
+
+  @@unique([provider, subject])
+  @@unique([adminId, provider])
 }
 
 model Profile {

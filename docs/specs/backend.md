@@ -126,8 +126,8 @@ Uma API em NestJS + Prisma + PostgreSQL que é a fonte única do conteúdo do po
 - **Single-tenant**: um portfolio, um admin. Nenhuma tabela carrega `userId` além do próprio admin. `Profile` é singleton.
 
 ### Módulos
-- **Config**: valida env no boot com zod (DB URL, dois segredos JWT distintos, TTLs, origem CORS, driver de storage, diretório de uploads, tamanho mínimo de senha, credenciais do seed).
-- **Auth**: login, refresh, logout, troca de senha; guard JWT global (deny-by-default): toda rota exige token, exceto as marcadas como públicas.
+- **Config**: valida env no boot com zod (DB URL, dois segredos JWT distintos, TTLs, origem CORS, driver de storage, diretório de uploads, tamanho mínimo de senha, credenciais do seed, credenciais do Google e chave do cookie do fluxo pendente).
+- **Auth**: login por senha e pelo Google, refresh, logout, troca de senha; guard JWT global (deny-by-default): toda rota exige token, exceto as marcadas como públicas.
 - **Profile**, **SocialLinks**, **Skills** (categorias + skills), **Projects**, **Experience**, **Education**, **Services**: CRUD admin + reorder; leitura pública.
 - **Portfolio (público)**: agregado de leitura da home.
 - **Media**: upload, listagem, deleção; depende de Storage.
@@ -143,14 +143,24 @@ Uma API em NestJS + Prisma + PostgreSQL que é a fonte única do conteúdo do po
 - Segredos distintos para access e refresh; algoritmo fixado na verificação.
 - Senha com **argon2id**. Mensagem de erro de login genérica. Tamanho mínimo configurável por `PASSWORD_MIN_LENGTH` (padrão 5), aplicado na troca de senha e no seed.
 - **Abertura de sessão**: todo Login, qualquer que seja o método, abre a sessão por um único ponto (`AuthController.openSession`): emite os tokens, grava o refresh cookie e anuncia o Login com o método. O método só resolve qual Admin é.
-- **Aviso de Login**: cada Login (e-mail e senha corretos) gera uma mensagem **silenciosa** (flag `SUPPRESS_NOTIFICATIONS`) no `#alertas` do Discord, com o método ("Senha"), IP real (header da borda), navegador (user agent cortado em 200 caracteres) e horário (`timestamp` do embed, mostrado no fuso de quem lê). Um Login que não foi o dono é um incidente. Refresh e senha errada não avisam. Webhook em `DISCORD_ALERTS_WEBHOOK_URL` (`discord-alerts-webhook` no SSM), obrigatório em produção. O Discord com erro ou lento (até ~2 s) **não bloqueia o Login**: a falha vai para o log com nível `error`, que o alarme de erros da API pega. País fica de fora: o plano Free do CloudFront não repassa esse header.
-- Sem signup público; admin criado por **seed idempotente** a partir de `ADMIN_EMAIL`/`ADMIN_PASSWORD`.
+- **Aviso de Login**: cada Login (e-mail e senha corretos, ou uma Conta vinculada) gera uma mensagem **silenciosa** (flag `SUPPRESS_NOTIFICATIONS`) no `#alertas` do Discord, com o método ("Senha" ou "Google (e-mail da conta)"), IP real (header da borda), navegador (user agent cortado em 200 caracteres) e horário (`timestamp` do embed, mostrado no fuso de quem lê). Um Login que não foi o dono é um incidente. Refresh e senha errada não avisam. Webhook em `DISCORD_ALERTS_WEBHOOK_URL` (`discord-alerts-webhook` no SSM), obrigatório em produção. O Discord com erro ou lento (até ~2 s) **não bloqueia o Login**: a falha vai para o log com nível `error`, que o alarme de erros da API pega. País fica de fora: o plano Free do CloudFront não repassa esse header.
+- Sem signup público; admin criado por **seed idempotente** a partir de `ADMIN_EMAIL`/`ADMIN_PASSWORD`. Nenhuma conta é criada a partir do Google.
 - MFA fora de escopo.
+
+### Login pelo Google (Conta vinculada)
+Decisões no ADR 0002; fontes em `docs/research/oauth-google.md`.
+- OpenID Connect, Authorization Code no servidor, pela `openid-client` (ESM, importada no primeiro uso). O pedido leva `scope=openid email`, `prompt=select_account`, `state`, `nonce` e PKCE `S256`, sem `access_type=offline`. Discovery lazy, uma vez por instância, em memória (timeout de 5 s por requisição ao Google). Nenhum token do Google é guardado.
+- **Provedor Google** (`auth/google.provider.ts`): o único ponto que fala com o Google e o único substituído nos testes. Monta a URL de autorização e troca os parâmetros da volta por `{ subject, email }`, com `iss`, `aud`, `exp` e `nonce` validados. A redirect URI é `PUBLIC_URL` + `/api/auth/google/callback`, nunca o header `Host` (atrás do CloudFront ele é o da Lambda). Em dev, `PUBLIC_URL` é a origem do Vite (`http://localhost:5173`).
+- **Cookie do fluxo pendente** `google_oauth` (`auth/pending-flow-cookie.ts`): intenção (`login`), `state`, `nonce` e `code_verifier`, cifrados com AES-256-GCM (chave = SHA-256 de `OAUTH_STATE_SECRET`), com expiração de 10 min embutida. `HttpOnly; Secure; SameSite=Lax; Path=/api/auth/google/callback; Max-Age=600`: precisa ser `Lax`, porque um cookie `Strict` não volta na navegação vinda do Google.
+- **Uso único**: a volta apaga o cookie em qualquer resultado, e uma cópia reenviada dentro dos 10 min é recusada por um contador do rate limit (`RateLimit`, chave `google-flow:<state>`, limite 1).
+- **Volta** (`/admin?google=<código>` nas falhas, sempre caminhos fixos): cookie ausente, alterado, de outra chave, expirado ou já usado → `erro`; `error=access_denied` → `cancelado`; outro `error` → `erro`; `state` diferente do cookie → `erro`; falha na troca → `erro`; `sub` sem Conta vinculada → `nao-vinculada`; sucesso → atualiza o e-mail exibido, abre a sessão pelo ponto único e responde 302 para `/admin`, onde o painel restaura a sessão pelo refresh cookie.
+- **Logs**: falhas que quem chama consegue causar vão como `warn`, nunca `error` (não disparam Alerta). A query string da volta nunca é logada (leva o code); da falha na troca só vão o nome e o código do erro. Falha no discovery ao iniciar é `error`.
+- **Config**: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` e `OAUTH_STATE_SECRET` (mínimo de 32 caracteres, diferente dos segredos JWT). Opcionais por enquanto; sem os três, o início responde 302 para `/admin?google=erro`.
 
 ### Segurança transversal
 - Helmet; CORS com allowlist (em prod, front e API no mesmo site via reverse proxy em `/api`, então CORS só importa em dev).
 - `ValidationPipe` global com `whitelist`, `forbidNonWhitelisted`, `transform`.
-- `@nestjs/throttler`: limites estritos por IP em login, refresh, troca de senha (5 por minuto, como o login: um access token roubado não testa senhas sem limite), `POST /contact` e `GET /cv`, com contadores no Postgres (compartilhados entre instâncias). O limite global por IP fica no WAF (ver `infra.md`).
+- `@nestjs/throttler`: limites estritos por IP em login, refresh, troca de senha (5 por minuto, como o login: um access token roubado não testa senhas sem limite), início e volta do Login pelo Google (5 por minuto cada), `POST /contact` e `GET /cv`, com contadores no Postgres (compartilhados entre instâncias). O limite global por IP fica no WAF (ver `infra.md`).
 - Limites de tamanho de corpo e de upload.
 - HTTPS terminado na borda (CloudFront). O IP real do cliente vem de um header gravado pela borda (`CLIENT_IP_HEADER`), nunca do `X-Forwarded-For`, cujas entradas o cliente pode forjar.
 - Logs estruturados do Nest; sem tabela de auditoria nem lockout por conta.
@@ -165,6 +175,7 @@ Uma API em NestJS + Prisma + PostgreSQL que é a fonte única do conteúdo do po
 Todas as coleções têm `id`, `position` (int, ordenação manual), `visible` (bool), `createdAt`, `updatedAt`. `LT` = `LocalizedText` (JSONB).
 
 - **Admin**: email (único), passwordHash, tokenVersion.
+- **LinkedAccount** (Conta vinculada): adminId → Admin (apagada em cascata), provider (enum, hoje só `GOOGLE`), subject (o `sub`), email (só para exibir). Únicos em `(provider, subject)` e `(adminId, provider)`. Ter uma nunca dá acesso ao painel por si só.
 - **Profile** (singleton): name, headline `LT`, summary `LT`, about `LT[]` (parágrafos, JSONB), location `LT`, availability `LT`, workModality `LT`, spokenLanguages `LT`, email, phone, showEmail, showPhone, photoMediaId → Media.
 - **SocialLink**: label, url.
 - **SkillCategory**: name `LT`; **Skill**: name (não traduzível), categoryId → SkillCategory (cascade).
@@ -204,6 +215,7 @@ Público (sem auth):
 
 Auth:
 - `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `PATCH /admin/account/password`.
+- `GET /auth/google` (302 para o Google, ou para `/admin?google=erro` sem credenciais) e `GET /auth/google/callback` (302 para `/admin` ou `/admin?google=<código>`); ver Login pelo Google.
 
 Admin (`/admin/*`, JWT obrigatório):
 - `GET|PUT /admin/profile`.
@@ -255,6 +267,7 @@ Admin (`/admin/*`, JWT obrigatório):
 - **Seam principal (única)**: testes e2e via supertest contra a aplicação Nest completa, com Postgres real (`db-test` no compose) e storage local apontando para diretório temporário. O banco é limpo entre suites.
 - **Cobertura mínima esperada**:
   - Auth: login ok/falha genérica; rota admin sem token → 401; refresh rotaciona; refresh após logout ou troca de senha → 401; senha nova abaixo do mínimo → 400; throttle de login e de troca de senha → 429.
+  - Login pelo Google (provedor trocado por um dublê via `overrideProvider`, nunca por variável de ambiente): atributos do cookie; sucesso com refresh funcionando e aviso com o método; `nao-vinculada`, `cancelado` e cada `erro` (cookie ausente, alterado, de outra chave, expirado ou reutilizado; `state` divergente; falha na troca); logs `warn` sem a query; logout e troca de senha revogam a sessão; 429 no início e na volta; sem credenciais → `erro`.
   - Validação: campo desconhecido → 400; `LocalizedText` sem `pt` → 400.
   - i18n: `?lang=en` com EN ausente cai para PT.
   - Visibilidade: item `visible=false` nunca aparece nas rotas públicas nem no CV.

@@ -369,6 +369,15 @@ main.section > h1 { font-size: 32px; margin-bottom: 24px; }
 .login-card h1 { font-size: 24px; }
 .login-card .muted { margin-top: 6px; }
 .login-card .button { margin-top: 6px; }
+/* Google's sign-in button branding (developers.google.com/identity/branding-guidelines): the standard G, its colors for
+   each theme, Medium 14/20. Roboto when installed; the CSP serves no third-party fonts, so it falls back to the site's. */
+.google-button {
+  display: flex; align-items: center; justify-content: center; gap: 10px; height: 40px; padding: 0 12px;
+  font: 500 14px/20px Roboto, var(--font); text-decoration: none; border-radius: 8px;
+  color: light-dark(#1f1f1f, #e3e3e3); background: light-dark(#ffffff, #131314); border: 1px solid light-dark(#747775, #8e918f);
+}
+.google-button:hover { background: light-dark(#f2f2f2, #1f1f20); }
+.google-button svg { width: 20px; height: 20px; flex: none; }
 .back-link { font-size: 13px; color: var(--color-neutral-500); text-decoration: none; transition: color 0.18s; }
 .back-link:hover { color: var(--color-accent-300); }
 

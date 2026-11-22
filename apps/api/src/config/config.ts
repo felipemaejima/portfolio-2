@@ -32,10 +32,20 @@ const schema = z
     DISCORD_CONTACT_WEBHOOK_URL: z.url().optional(),
     DISCORD_ALERTS_WEBHOOK_URL: z.url().optional(),
     DISCORD_VISITS_WEBHOOK_URL: z.url().optional(),
+    /** Login com Google (ADR 0002). Optional for now: without all three, the Google button leads to the generic error.
+     * Dev uses its own OAuth client (redirect on localhost), never production's. */
+    GOOGLE_CLIENT_ID: z.string().min(1).optional(),
+    GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
+    /** Key of the cookie that holds a Login pelo Google in progress (AES-256-GCM): a secret of its own. */
+    OAUTH_STATE_SECRET: z.string().min(32).optional(),
   })
   .refine((c) => c.JWT_ACCESS_SECRET !== c.JWT_REFRESH_SECRET, {
     message: 'must differ from JWT_ACCESS_SECRET',
     path: ['JWT_REFRESH_SECRET'],
+  })
+  .refine((c) => !c.OAUTH_STATE_SECRET || ![c.JWT_ACCESS_SECRET, c.JWT_REFRESH_SECRET].includes(c.OAUTH_STATE_SECRET), {
+    message: 'must differ from the JWT secrets',
+    path: ['OAUTH_STATE_SECRET'],
   })
   .refine((c) => c.STORAGE_DRIVER !== 's3' || (c.S3_BUCKET && c.UPLOADS_PUBLIC_URL), {
     message: 'S3_BUCKET and UPLOADS_PUBLIC_URL are required with STORAGE_DRIVER=s3',
