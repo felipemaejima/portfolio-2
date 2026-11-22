@@ -1,4 +1,4 @@
-import { useEffect, useState, type ChangeEvent, type RefObject } from 'react';
+import { useEffect, useState, type ChangeEvent, type ReactNode, type RefObject } from 'react';
 import { api } from '../lib/api';
 
 type LocalizedText = { pt: string; en?: string };
@@ -211,12 +211,21 @@ export function FieldInput(props: { field: Field; values: Values; onChange: (cha
   }
 }
 
-function LocalizedInput(props: { label: string; multiline: boolean; required?: boolean; value: LocalizedText; onChange: (value: LocalizedText) => void }) {
-  const { label, multiline, required, value, onChange } = props;
+/** `children`: extra controls next to the legend (a list item's Remover). */
+function LocalizedInput(props: {
+  label: string;
+  multiline: boolean;
+  required?: boolean;
+  value: LocalizedText;
+  onChange: (value: LocalizedText) => void;
+  children?: ReactNode;
+}) {
+  const { label, multiline, required, value, onChange, children } = props;
   const Input = multiline ? 'textarea' : 'input';
   return (
     <fieldset className="localized">
       <legend>{label}</legend>
+      {children}
       <label>
         PT
         <Input lang="pt-BR" value={value.pt} required={required} maxLength={5000} rows={multiline ? 3 : undefined} onChange={(event) => onChange({ ...value, pt: event.target.value })} />
@@ -237,12 +246,11 @@ function LocalizedListInput({ label, value, onChange }: { label: string; value: 
     <fieldset className="localized-list">
       <legend>{label}</legend>
       {value.map((item, index) => (
-        <div key={index} className="list-item">
-          <LocalizedInput label={`#${index + 1}`} multiline value={item} onChange={(next) => update(index, next)} />
+        <LocalizedInput key={index} label={`#${index + 1}`} multiline value={item} onChange={(next) => update(index, next)}>
           <button type="button" className="button button-small" onClick={() => onChange(value.filter((_, i) => i !== index))}>
             Remover
           </button>
-        </div>
+        </LocalizedInput>
       ))}
       <button type="button" className="button button-small" onClick={() => onChange([...value, { pt: '', en: '' }])}>
         Adicionar
@@ -328,22 +336,29 @@ function MediaInput(props: {
     >
       <legend>{label}</legend>
       {(preview ?? url) && <img src={preview ?? url!} alt="" className="media-preview" />}
-      <input
-        type="file"
-        accept={IMAGE_TYPES.join()}
-        disabled={state.uploading}
-        onChange={(event) => {
-          const file = event.target.files?.[0];
-          event.target.value = ''; // picking the same file again (after a refusal) still fires a change
-          if (file) void upload(file);
-        }}
-      />
+      <div className="actions">
+        {/* The native input, visually hidden inside a label styled as a button: still focused and named by it. */}
+        <label className="button button-small">
+          Escolher imagem
+          <input
+            type="file"
+            className="visually-hidden"
+            accept={IMAGE_TYPES.join()}
+            disabled={state.uploading}
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = ''; // picking the same file again (after a refusal) still fires a change
+              if (file) void upload(file);
+            }}
+          />
+        </label>
+        {url && (
+          <button type="button" className="button button-small" onClick={() => onChange(null, null)}>
+            Remover imagem
+          </button>
+        )}
+      </div>
       <small>JPEG, PNG ou WebP, até 4 MB; com mais de 1600 px, a imagem é reduzida. Também dá para arrastá-la até aqui.</small>
-      {url && (
-        <button type="button" className="button button-small" onClick={() => onChange(null, null)}>
-          Remover imagem
-        </button>
-      )}
       {state.uploading && <small className="loading">Enviando imagem…</small>}
       {state.error && <p className="form-error">{state.error}</p>}
     </fieldset>
