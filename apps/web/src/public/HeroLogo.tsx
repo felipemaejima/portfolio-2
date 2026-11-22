@@ -1,4 +1,4 @@
-import { logoLetters } from '../lib/logo';
+import { logoLetters, logoViewBox } from '../lib/logo';
 
 const [f, m] = logoLetters;
 
@@ -10,7 +10,7 @@ const variant = Math.random() < 0.5 ? 'trace' : 'fit';
 export function HeroLogo() {
   if (variant === 'trace')
     return (
-      <svg className="hero-logo trace" viewBox="0 0 279 198" aria-hidden="true">
+      <svg className="hero-logo trace" viewBox={logoViewBox} aria-hidden="true">
         <defs>
           <clipPath id="hero-logo-clip">
             <path d={f} />
@@ -35,7 +35,7 @@ export function HeroLogo() {
       </svg>
     );
   return (
-    <svg className="hero-logo fit" viewBox="0 0 279 198" aria-hidden="true">
+    <svg className="hero-logo fit" viewBox={logoViewBox} aria-hidden="true">
       <g className="echo">
         <path d={f} />
         <path d={m} />

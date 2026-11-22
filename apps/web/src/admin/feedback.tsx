@@ -1,16 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useBlocker } from 'react-router';
+import { useBlocker, type Blocker } from 'react-router';
 
 /** A question in the confirmation dialog (delete, discard changes). `onCancel`: on its cancel button and Esc. */
 type Confirmation = { title: string; message: string; confirm: string; cancel?: string; onConfirm: () => void; onCancel?: () => void };
 
 /**
  * The confirmation dialog (Perfil and collections): `ask` opens it with a question, `askDiscard` with "Descartar alterações?".
- * Render `dialog` once. While a form has unsaved changes (`dirty`): reloading or closing the tab makes the browser ask
- * first, and Back or a link asks to discard.
+ * Render `dialog` once.
  */
-export function useConfirmation(dirty: boolean) {
+export function useConfirmation() {
   const [confirmation, ask] = useState<Confirmation | null>(null);
   const ref = useRef<HTMLDialogElement>(null);
 
@@ -18,13 +17,6 @@ export function useConfirmation(dirty: boolean) {
   useEffect(() => {
     if (confirmation) ref.current?.showModal(); // focuses its first button: the safe choice
   }, [confirmation]);
-
-  useEffect(() => {
-    if (!dirty) return;
-    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
-    addEventListener('beforeunload', warn);
-    return () => removeEventListener('beforeunload', warn);
-  }, [dirty]);
 
   const askDiscard = (onConfirm: () => void, onCancel?: () => void) =>
     ask({
@@ -35,10 +27,6 @@ export function useConfirmation(dirty: boolean) {
       onConfirm,
       onCancel,
     });
-  // Back or a link: the router holds the navigation while the question is asked (once per hold).
-  const blocker = useBlocker(dirty);
-  if (blocker.state === 'blocked' && confirmation?.onConfirm !== blocker.proceed) askDiscard(blocker.proceed, blocker.reset);
-
   const answer = (choice?: () => void) => {
     ref.current?.close();
     choice?.();
@@ -69,6 +57,30 @@ export function useConfirmation(dirty: boolean) {
     </dialog>
   );
   return { ask, askDiscard, dialog };
+}
+
+/** Whether a form's values differ from the ones it started from (loaded or last saved). */
+export const isDirty = (values: unknown, initial: unknown) => JSON.stringify(values) !== JSON.stringify(initial);
+
+/**
+ * While a form has unsaved changes (`dirty`): reloading or closing the tab makes the browser ask first, and Back or a
+ * link asks with `askDiscard` (useConfirmation's).
+ */
+export function useUnsavedChangesGuard(dirty: boolean, askDiscard: (onConfirm: () => void, onCancel: () => void) => void) {
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
+    addEventListener('beforeunload', warn);
+    return () => removeEventListener('beforeunload', warn);
+  }, [dirty]);
+
+  // Back or a link: the router holds the navigation while the question is asked (once per hold).
+  const blocker = useBlocker(dirty);
+  const [asked, setAsked] = useState<Blocker>();
+  if (blocker.state === 'blocked' && asked !== blocker) {
+    setAsked(blocker);
+    askDiscard(blocker.proceed, blocker.reset);
+  }
 }
 
 /** Toasts (Perfil and collections): `notify` adds one; a success one goes away by itself, an error one stays until closed. Render `toasts` once. */

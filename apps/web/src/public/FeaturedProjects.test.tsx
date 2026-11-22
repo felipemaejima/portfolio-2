@@ -98,10 +98,10 @@ it('stops with Pausar and goes on with Retomar', () => {
 
 it('waits while the mouse is over it or the focus is in it', () => {
   renderProjects(5);
-  fireEvent.mouseEnter(carousel()!);
+  fireEvent.pointerEnter(carousel()!, { pointerType: 'mouse' });
   wait(10000);
   expect(counter()).toBe('01 / 05');
-  fireEvent.mouseLeave(carousel()!);
+  fireEvent.pointerLeave(carousel()!, { pointerType: 'mouse' });
   wait(5000);
   expect(counter()).toBe('02 / 05');
 
@@ -112,6 +112,20 @@ it('waits while the mouse is over it or the focus is in it', () => {
   act(() => screen.getByRole('button', { name: 'Próximo projeto' }).blur());
   wait(5000);
   expect(counter()).toBe('03 / 05');
+});
+
+it('goes on after a tap on a touch screen', () => {
+  renderProjects(5);
+  // What a tap fires: the touch pointer comes and goes, then the compatibility mouse events, which never leave.
+  const target = carousel()!.querySelector('p')!;
+  fireEvent.pointerEnter(target, { pointerType: 'touch' });
+  fireEvent.pointerDown(target, { pointerType: 'touch' });
+  fireEvent.pointerUp(target, { pointerType: 'touch' });
+  fireEvent.pointerLeave(target, { pointerType: 'touch' });
+  fireEvent.mouseEnter(target);
+  fireEvent.click(target);
+  wait(5000);
+  expect(counter()).toBe('02 / 05');
 });
 
 it('waits while the tab is hidden', () => {
@@ -128,13 +142,20 @@ it('waits while the tab is hidden', () => {
   expect(counter()).toBe('02 / 05');
 });
 
-it("doesn't advance by itself when the visitor asked for reduced motion", () => {
+it("doesn't advance by itself, nor offer to, when the visitor asked for reduced motion", () => {
   reducedMotion = true;
   renderProjects(5);
+  expect(screen.queryByRole('button', { name: 'Retomar' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Pausar' })).toBeNull();
   wait(10000);
   expect(counter()).toBe('01 / 05');
   click('Próximo projeto');
   expect(counter()).toBe('02 / 05');
+  click('Projeto 3');
+  expect(counter()).toBe('03 / 05');
+  wait(10000);
+  expect(counter()).toBe('03 / 05');
+  expect(carousel()!.querySelector('[aria-live]')!.getAttribute('aria-live')).toBe('polite');
 });
 
 /** The project details dialog that is open, if any. */

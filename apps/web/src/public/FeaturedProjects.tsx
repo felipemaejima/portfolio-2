@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useLang } from '../lib/i18n';
 import type { Project } from '../lib/types';
+import { LineIcon } from './LineIcon';
 import { ProjectCard } from './ProjectCard';
 
+/** Time between automatic steps, here and for the progress bar (--interval, styles.css). */
 const INTERVAL = 5000;
+const exposeInterval = (carousel: HTMLElement | null) => carousel?.style.setProperty('--interval', `${INTERVAL}ms`);
 const pad = (n: number) => String(n).padStart(2, '0');
 const onVisibilityChange = (callback: () => void) => {
   document.addEventListener('visibilitychange', callback);
@@ -34,13 +37,14 @@ function Carousel({ projects }: { projects: Project[] }) {
   const [focus, setFocus] = useState(0);
   const go = (step: number) => setFocus((current) => (current + step + total) % total);
   const label = (index: number) => t.slideOf.replace('{n}', String((index % count) + 1)).replace('{total}', String(count));
-  // Reduced motion: it starts paused; Retomar is there for whoever wants it to run anyway.
-  const [paused, setPaused] = useState(() => matchMedia('(prefers-reduced-motion: reduce)').matches);
+  // Reduced motion: no automatic steps at all, so no pause button nor progress bar; the visitor steps through it.
+  const autoplay = !matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const [paused, setPaused] = useState(false);
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
   const hidden = useSyncExternalStore(onVisibilityChange, () => document.hidden);
-  // It waits while being read (mouse over it, focus in it), in a hidden tab, and when paused.
-  const running = !paused && !hovered && !focused && !hidden;
+  // It waits while being read (a mouse over it, keyboard focus in it), in a hidden tab, and when paused.
+  const running = autoplay && !paused && !hovered && !focused && !hidden;
   const swipeX = useRef<number | null>(null);
 
   // Time left to the next step. A pause keeps it, so the timer picks up where the progress bar stopped; a step resets it.
@@ -62,12 +66,15 @@ function Carousel({ projects }: { projects: Project[] }) {
 
   return (
     <section
+      ref={exposeInterval}
       className="carousel"
       aria-roledescription={t.carousel}
       aria-label={t.featuredProjects}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      onFocus={() => setFocused(true)}
+      // A mouse only: a tap also fires mouseenter, but no mouseleave until the next tap elsewhere.
+      onPointerEnter={(event) => event.pointerType === 'mouse' && setHovered(true)}
+      onPointerLeave={() => setHovered(false)}
+      // Keyboard focus only (focus-visible): a tapped button keeps the focus, and would hold it until a tap elsewhere.
+      onFocus={(event) => event.target.matches(':focus-visible') && setFocused(true)}
       onBlur={(event) => !event.currentTarget.contains(event.relatedTarget) && setFocused(false)}
     >
       <div className="carousel-controls">
@@ -80,16 +87,26 @@ function Carousel({ projects }: { projects: Project[] }) {
             {label(focus)}: {slides[focus].title}
           </span>
         </p>
-        {/* Time to the next step: a CSS animation as long as the interval, restarted on each step, frozen while it waits. */}
-        <span key={focus} className={running ? 'carousel-progress' : 'carousel-progress paused'} aria-hidden="true" />
-        <button type="button" className="button" aria-label={paused ? t.resume : t.pause} title={paused ? t.resume : t.pause} onClick={() => setPaused(!paused)}>
-          <Icon path={paused ? 'M6 3l14 9-14 9z' : 'M6 4h4v16H6zM14 4h4v16h-4z'} />
-        </button>
+        {autoplay && (
+          <>
+            {/* Time to the next step: a CSS animation as long as the interval, restarted on each step, frozen while it waits. */}
+            <span key={focus} className={running ? 'carousel-progress' : 'carousel-progress paused'} aria-hidden="true" />
+            <button type="button" className="button" aria-label={paused ? t.resume : t.pause} title={paused ? t.resume : t.pause} onClick={() => setPaused(!paused)}>
+              <LineIcon size={18}>
+                <path d={paused ? 'M6 3l14 9-14 9z' : 'M6 4h4v16H6zM14 4h4v16h-4z'} />
+              </LineIcon>
+            </button>
+          </>
+        )}
         <button type="button" className="button" aria-label={t.previousProject} title={t.previousProject} onClick={() => go(-1)}>
-          <Icon path="m15 18-6-6 6-6" />
+          <LineIcon size={18}>
+            <path d="m15 18-6-6 6-6" />
+          </LineIcon>
         </button>
         <button type="button" className="button" aria-label={t.nextProject} title={t.nextProject} onClick={() => go(1)}>
-          <Icon path="m9 18 6-6-6-6" />
+          <LineIcon size={18}>
+            <path d="m9 18 6-6-6-6" />
+          </LineIcon>
         </button>
       </div>
       <div
@@ -130,14 +147,5 @@ function Carousel({ projects }: { projects: Project[] }) {
         })}
       </div>
     </section>
-  );
-}
-
-/** Line icons from Lucide (ISC license): chevrons, pause, play. */
-function Icon({ path }: { path: string }) {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d={path} />
-    </svg>
   );
 }

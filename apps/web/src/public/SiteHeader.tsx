@@ -5,6 +5,7 @@ import { Logo } from '../lib/logo';
 import { visibleSections, type Section } from '../lib/sections';
 import { ThemeToggle } from '../lib/theme';
 import type { Portfolio } from '../lib/types';
+import { LineIcon } from './LineIcon';
 
 /** The nav links to the home page's sections that `portfolio` shows (none while it loads). */
 export function SiteHeader({ portfolio }: { portfolio?: Portfolio }) {
@@ -50,9 +51,9 @@ export function SiteHeader({ portfolio }: { portfolio?: Portfolio }) {
         </a>
         {sections.length > 0 && (
           <button type="button" className="lang-toggle menu-toggle" popoverTarget="site-menu" aria-label="Menu">
-            <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-            </svg>
+            <LineIcon size={18}>
+              <path d="M4 7h16M4 12h16M4 17h16" />
+            </LineIcon>
           </button>
         )}
       </div>
