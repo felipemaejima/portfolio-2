@@ -1,13 +1,11 @@
 import { useCallback, useEffect, useRef, useState, type DragEvent, type FormEvent } from 'react';
-import { createPortal } from 'react-dom';
 import { api } from '../lib/api';
 import type { Collection } from './collections';
+import { isDirty, useConfirmation, useToasts, useUnsavedChangesGuard } from './feedback';
 import { FieldInput, missingEnglish, toFormValues, toPayload, useSaveShortcut } from './fields';
 
 type Item = Record<string, unknown> & { id: string; visible: boolean };
 type Values = Record<string, unknown>;
-/** A question in the confirmation dialog (delete, discard changes). */
-type Confirmation = { title: string; message: string; confirm: string; cancel?: string; onConfirm: () => void };
 const refuseFiles = (event: DragEvent) => {
   if (event.dataTransfer.types.includes('Files')) event.preventDefault();
 };
@@ -24,12 +22,8 @@ export function CollectionPage({ collection }: { collection: Collection }) {
   // Rows with a change being saved: a spinner on each, and their actions wait for it.
   const [pending, setPending] = useState<string[]>([]);
   const [dragId, setDragId] = useState<string | null>(null);
-  const [toasts, setToasts] = useState<{ id: number; text: string; error?: boolean }[]>([]);
-  const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const itemsBeforeDrag = useRef<Item[]>([]);
-  const lastToast = useRef(0);
   const dialogRef = useRef<HTMLDialogElement>(null);
-  const confirmRef = useRef<HTMLDialogElement>(null);
   const submitRef = useRef<HTMLButtonElement>(null);
 
   const base = `/admin/${collection.path}`;
@@ -44,13 +38,7 @@ export function CollectionPage({ collection }: { collection: Collection }) {
   }, [fetchItems]);
   useEffect(load, [load]);
 
-  /** A toast: a success one goes away by itself, an error one stays until closed. */
-  const dismiss = (id: number) => setToasts((list) => list.filter((toast) => toast.id !== id));
-  const notify = (text: string, error = false) => {
-    const id = ++lastToast.current;
-    setToasts((list) => [...list, { id, text, error }]);
-    if (!error) setTimeout(() => dismiss(id), 4000);
-  };
+  const { notify, toasts } = useToasts();
 
   // The form lives in a native modal <dialog>: opened while `editing` is set (focus trap and backdrop for free).
   const isEditing = editing !== null;
@@ -59,7 +47,7 @@ export function CollectionPage({ collection }: { collection: Collection }) {
   if (editing && editing !== lastEditing) setLastEditing(editing);
   const shown = editing ?? lastEditing;
   const locked = saving || uploading; // the form can't close mid-save or mid-upload
-  const dirty = editing !== null && JSON.stringify(editing.values) !== JSON.stringify(editing.initial);
+  const dirty = editing !== null && isDirty(editing.values, editing.initial);
   useEffect(() => {
     const dialog = dialogRef.current;
     if (!dialog) return;
@@ -70,32 +58,14 @@ export function CollectionPage({ collection }: { collection: Collection }) {
     if (!isEditing && dialog.open) dialog.close();
   }, [isEditing]);
   useSaveShortcut(submitRef, isEditing);
-  // Leaving the page (reload, closing the tab) with unsaved changes: the browser asks first. In-app links can't be reached
-  // meanwhile (the modal makes the page inert).
-  // ponytail: the browser's Back still leaves without asking; that needs a data router (useBlocker).
-  useEffect(() => {
-    if (!dirty) return;
-    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
-    addEventListener('beforeunload', warn);
-    return () => removeEventListener('beforeunload', warn);
-  }, [dirty]);
-
-  // The confirmation dialog stays rendered after closing (for its exit), until the next question replaces it.
-  useEffect(() => {
-    if (confirmation) confirmRef.current?.showModal(); // focuses its first button: the safe choice
-  }, [confirmation]);
+  const { ask, askDiscard, dialog } = useConfirmation();
+  useUnsavedChangesGuard(dirty, askDiscard);
 
   /** ✕, Cancelar and Esc: nothing while saving or uploading; with unsaved changes, asks first. */
   const closeForm = () => {
     if (locked) return;
     if (!dirty) return setEditing(null);
-    setConfirmation({
-      title: 'Descartar alterações?',
-      message: 'O que você mudou neste formulário ainda não foi salvo.',
-      confirm: 'Descartar',
-      cancel: 'Continuar editando',
-      onConfirm: () => setEditing(null),
-    });
+    askDiscard(() => setEditing(null));
   };
 
   /** Saves a change to one row in the background, with a spinner on it. If it fails: an error toast, then `undo`. */
@@ -110,17 +80,27 @@ export function CollectionPage({ collection }: { collection: Collection }) {
     setPending((ids) => ids.filter((pendingId) => pendingId !== id));
   };
 
+  // Reorders go out one at a time, in the order they were made: each sends the whole list, so the last one must land last.
+  const reorders = useRef<Promise<unknown>>(Promise.resolve());
+
   /**
    * Show/hide and reorder: the list changes at once, then is saved. If saving fails, it goes back to what the API has
-   * (also right when another change landed meanwhile), or to `before` when the API can't be reached.
-   * ponytail: reorders started from two rows at once may reach the API out of order; queue them if that ever shows.
+   * (also right when another change landed meanwhile), or to `before` when the API can't be reached. What the API has
+   * is read after the reorders already queued land, or one still on its way would be undone on screen only.
    */
   const change = (id: string, next: Item[], request: () => Promise<unknown>, before = items) => {
     setItems(next);
-    void saveRow(id, request, async () => setItems(await fetchItems().catch(() => before)));
+    void saveRow(id, request, async () => {
+      await reorders.current;
+      setItems(await fetchItems().catch(() => before));
+    });
   };
 
-  const reorder = (list: Item[]) => () => api(`${base}/reorder`, { method: 'PATCH', json: { ids: list.map((item) => item.id) }, auth: true });
+  const reorder = (list: Item[]) => () => {
+    const request = reorders.current.then(() => api(`${base}/reorder`, { method: 'PATCH', json: { ids: list.map((item) => item.id) }, auth: true }));
+    reorders.current = request.catch(() => {}); // the next one goes either way: a failure is handled by its own change()
+    return request;
+  };
 
   const move = (list: Item[], index: number, offset: number) => {
     const next = [...list];
@@ -135,10 +115,13 @@ export function CollectionPage({ collection }: { collection: Collection }) {
       () => api(`${base}/${item.id}`, { method: 'PATCH', json: { visible: !item.visible }, auth: true }),
     );
 
-  const remove = (item: Item) =>
-    setConfirmation({
+  // The dialog opens once the warning is known (a category counts its skills first).
+  const remove = async (item: Item) =>
+    ask({
       title: `Excluir ${collection.item}?`,
-      message: [`Esta ação exclui “${collection.summary(item)}” permanentemente.`, collection.deleteWarning].filter(Boolean).join(' '),
+      message: [`Esta ação exclui “${(collection.deleteLabel ?? collection.summary)(item)}” permanentemente.`, await collection.deleteWarning?.(item)]
+        .filter(Boolean)
+        .join(' '),
       confirm: 'Excluir',
       onConfirm: () =>
         void saveRow(item.id, async () => {
@@ -258,47 +241,8 @@ export function CollectionPage({ collection }: { collection: Collection }) {
         )}
       </dialog>
 
-      <dialog ref={confirmRef} className="modal confirm" role="alertdialog" aria-labelledby="confirm-title" aria-describedby="confirm-message">
-        {confirmation && (
-          <div className="form">
-            <h2 id="confirm-title">{confirmation.title}</h2>
-            <p id="confirm-message">{confirmation.message}</p>
-            <div className="actions">
-              <button type="button" className="button" onClick={() => confirmRef.current?.close()}>
-                {confirmation.cancel ?? 'Cancelar'}
-              </button>
-              <button
-                type="button"
-                className="button button-danger"
-                onClick={() => {
-                  confirmRef.current?.close();
-                  confirmation.onConfirm();
-                }}
-              >
-                {confirmation.confirm}
-              </button>
-            </div>
-          </div>
-        )}
-      </dialog>
-
-      {/* Mounted before any toast, so screen readers announce what comes in; errors as alerts. In <body>: fixed to the
-          viewport, whatever the admin's boxes contain. */}
-      {createPortal(
-        <div className="toasts" aria-live="polite">
-          {toasts.map((toast) => (
-            <div key={toast.id} className={toast.error ? 'toast toast-error' : 'toast'} role={toast.error ? 'alert' : undefined}>
-              <p>{toast.text}</p>
-              {toast.error && (
-                <button type="button" className="button button-small" aria-label="Fechar aviso" onClick={() => dismiss(toast.id)}>
-                  ✕
-                </button>
-              )}
-            </div>
-          ))}
-        </div>,
-        document.body,
-      )}
+      {dialog}
+      {toasts}
 
       {!items ? (
         loadError ? (
@@ -380,7 +324,7 @@ export function CollectionPage({ collection }: { collection: Collection }) {
                   <button type="button" className="button button-small" onClick={() => openForm(item)}>
                     Editar
                   </button>
-                  <button type="button" className="button button-small button-danger" disabled={busy} onClick={() => remove(item)}>
+                  <button type="button" className="button button-small button-danger" disabled={busy} onClick={() => void remove(item)}>
                     Excluir
                   </button>
                 </div>

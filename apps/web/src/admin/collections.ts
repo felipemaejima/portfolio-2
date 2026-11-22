@@ -6,6 +6,9 @@ const str = (value: unknown) => (typeof value === 'string' ? value : '');
 const pt = (value: unknown) => str((value as { pt?: unknown } | undefined)?.pt);
 const dateRange = (item: Item) => [item.startDate, item.endDate].map((d) => (typeof d === 'string' ? d.slice(0, 7) : '…')).join(' → ');
 
+/** The skills' path: their collection's, and the listing a category counts them by before it's deleted. */
+const SKILLS_PATH = 'skills';
+
 const PRECISION = { type: 'select', options: [{ value: 'MONTH', label: 'Mês e ano' }, { value: 'YEAR', label: 'Só o ano' }] } as const;
 
 export type Collection = {
@@ -14,10 +17,12 @@ export type Collection = {
   /** One item, in titles: "Editar projeto". With its own "Novo"/"Nova", by the noun's gender. */
   item: string;
   newItem: string;
-  /** What else goes when an item is deleted (the database cascades), said in the delete dialog. */
-  deleteWarning?: string;
+  /** What else goes when an item is deleted (the database cascades), said in the delete dialog. Nothing: no warning. */
+  deleteWarning?: (item: Item) => Promise<string | undefined>;
   fields: Field[];
   summary: (item: Item) => string;
+  /** The item in the delete dialog, when the summary shows more than its name (a project's ★). Else the summary. */
+  deleteLabel?: (item: Item) => string;
   /** Only paginated admin lists accept paging params; the API rejects unknown query parameters. */
   listQuery?: string;
 };
@@ -40,12 +45,20 @@ export const COLLECTIONS: Collection[] = [
     title: 'Categorias de habilidades',
     item: 'categoria',
     newItem: 'Nova categoria',
-    deleteWarning: 'As habilidades desta categoria também serão excluídas.',
+    // Counted by the skills listing (hidden ones included: they go too). If that fails, the warning still goes, uncounted.
+    deleteWarning: async (item) => {
+      const skills = await api<Item[]>(`/admin/${SKILLS_PATH}?categoryId=${str(item.id)}`, { auth: true }).catch(() => undefined);
+      if (!skills) return 'As habilidades desta categoria também serão excluídas.';
+      if (skills.length === 0) return undefined;
+      return skills.length === 1
+        ? 'A única habilidade desta categoria também será excluída.'
+        : `As ${skills.length} habilidades desta categoria também serão excluídas.`;
+    },
     fields: [{ key: 'name', label: 'Nome', type: 'localized', required: true }],
     summary: (item) => pt(item.name),
   },
   {
-    path: 'skills',
+    path: SKILLS_PATH,
     title: 'Habilidades',
     item: 'habilidade',
     newItem: 'Nova habilidade',
@@ -77,6 +90,7 @@ export const COLLECTIONS: Collection[] = [
       { key: 'imageMediaId', label: 'Imagem', type: 'media', urlKey: 'imageUrl' },
     ],
     summary: (item) => `${pt(item.title)}${item.featured ? ' ★' : ''}`,
+    deleteLabel: (item) => pt(item.title),
     // ponytail: a single page of up to 50 projects; paginate the admin list if the portfolio ever grows past that.
     listQuery: '?pageSize=50',
   },

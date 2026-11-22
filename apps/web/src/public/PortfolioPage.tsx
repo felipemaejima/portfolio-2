@@ -8,7 +8,9 @@ import { useFetch } from '../lib/use-fetch';
 import { useReveal } from '../lib/use-reveal';
 import { announceVisit } from '../lib/visit';
 import { ContactForm } from './ContactForm';
-import { ProjectCard } from './ProjectCard';
+import { FeaturedProjects } from './FeaturedProjects';
+import { HeroLogo } from './HeroLogo';
+import { LineIcon } from './LineIcon';
 import { SiteHeader } from './SiteHeader';
 
 export function PortfolioPage() {
@@ -45,6 +47,15 @@ export function PortfolioPage() {
   }
   const sections = visibleSections(data);
   const skills = skillCategories.filter((category) => category.skills.length > 0);
+  // Line icons: map pin, clock, laptop, globe. A fact left empty isn't listed.
+  const facts = (
+    [
+      [t.location, profile.location, <><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0" /><circle cx="12" cy="10" r="3" /></>],
+      [t.availability, profile.availability, <><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></>],
+      [t.modality, profile.workModality, <><path d="M20 16V7a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v9m16 0H4m16 0 1.28 2.55a1 1 0 0 1-.9 1.45H3.62a1 1 0 0 1-.9-1.45L4 16" /></>],
+      [t.languages, profile.spokenLanguages, <><circle cx="12" cy="12" r="10" /><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" /><path d="M2 12h20" /></>],
+    ] as const
+  ).filter(([, value]) => splitItems(value).length > 0);
   const copy = async (value: string) => {
     await navigator.clipboard.writeText(value);
     setCopied(value);
@@ -90,45 +101,43 @@ export function PortfolioPage() {
               </li>
             )}
           </ul>
+          <HeroLogo />
         </section>
 
+        {/* Half photo, half text; without a photo the text stands alone. The first paragraph is the opening line. */}
         <section id="about" className="section about" data-reveal>
-          {profile.photoUrl ? (
-            <img className="photo" src={profile.photoUrl} alt={profile.name} />
-          ) : (
-            <div className="photo placeholder" aria-hidden="true" />
-          )}
-          <div>
-            <h2>{t.aboutMe}</h2>
+          {profile.photoUrl && <img className="about-photo" src={profile.photoUrl} alt={profile.name} />}
+          <div className="about-text">
+            <h2 className="eyebrow">{t.aboutMe}</h2>
             {profile.about.flatMap(paragraphs).map((paragraph, index) => (
-              <p key={index} className="body-text">
+              <p key={index} className={index ? 'body-text' : 'opening'}>
                 {paragraph}
               </p>
             ))}
-            <dl className="facts">
-              {(
-                [
-                  [t.location, profile.location],
-                  [t.availability, profile.availability],
-                  [t.modality, profile.workModality],
-                  [t.languages, profile.spokenLanguages],
-                ] as const
-              ).map(([label, value]) => (
-                <div key={label}>
-                  <dt>{label}</dt>
-                  <dd>
-                    <Items text={value} />
-                  </dd>
-                </div>
-              ))}
-            </dl>
+            {facts.length > 0 && (
+              <dl className="facts">
+                {facts.map(([label, value, icon]) => (
+                  <div key={label}>
+                    <dt>
+                      <LineIcon size={20} strokeWidth={1.5}>
+                        {icon}
+                      </LineIcon>
+                      {label}
+                    </dt>
+                    <dd>
+                      <Items text={value} />
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            )}
           </div>
         </section>
 
         {sections.includes('skills') && (
           <section id="skills" className="section" data-reveal>
             <h2>{t.skills}</h2>
-            <div className="grid grid-4">
+            <div className="grid grid-fit">
               {skills.map((category) => (
                 <div key={category.id}>
                   <p className="eyebrow">{category.name}</p>
@@ -145,13 +154,9 @@ export function PortfolioPage() {
           </section>
         )}
 
-        <section id="projects" className="section" data-reveal>
+        <section id="projects" className="section featured" data-reveal>
           <h2>{t.projects}</h2>
-          <div className="grid grid-3">
-            {projects.map((project) => (
-              <ProjectCard key={project.id} project={project} />
-            ))}
-          </div>
+          <FeaturedProjects projects={projects} />
           <div className="center">
             <Link className="button button-accent" to="/projetos">
               {t.seeAllProjects}
@@ -159,46 +164,52 @@ export function PortfolioPage() {
           </div>
         </section>
 
+        {/* Trajetória: Experiência left, Formação right (stacked on phones), only the one with items. It keeps the id
+            `experience` and Formação's column `education`, where old links point to. */}
         {sections.includes('experience') && (
-          <section id="experience" className="section" data-reveal>
-            <h2>{t.professionalExperience}</h2>
-            <ol className="timeline">
-              {experiences.map((item) => (
-                <li key={item.id}>
-                  <span className="period">
-                    {formatPeriod(item.startDate, item.endDate, item.datePrecision, lang, t.present)}
-                  </span>
-                  <div>
-                    <h3>{item.role}</h3>
-                    <p className="subtitle">{item.company}</p>
-                    <ul className="bullets">
-                      {item.bullets.map((bullet, index) => (
-                        <li key={index}>{bullet}</li>
-                      ))}
-                    </ul>
-                  </div>
-                </li>
-              ))}
-            </ol>
-          </section>
-        )}
-
-        {sections.includes('education') && (
-          <section id="education" className="section" data-reveal>
-            <h2>{t.education}</h2>
-            <ol className="timeline">
-              {education.map((item) => (
-                <li key={item.id}>
-                  <span className="period">
-                    {formatPeriod(item.startDate, item.endDate, item.datePrecision, lang, t.present)}
-                  </span>
-                  <div>
-                    <h3>{item.title}</h3>
-                    <p className="subtitle">{item.institution}</p>
-                  </div>
-                </li>
-              ))}
-            </ol>
+          <section id="experience" className="section trajectory" data-reveal>
+            <h2>{t.experience}</h2>
+            {experiences.length > 0 && (
+              <div>
+                <h3>{t.professionalExperience}</h3>
+                <ol className="timeline">
+                  {experiences.map((item) => (
+                    <li key={item.id}>
+                      <span className="period">
+                        {formatPeriod(item.startDate, item.endDate, item.datePrecision, lang, t.present)}
+                      </span>
+                      <div>
+                        <h4>{item.role}</h4>
+                        <p className="subtitle">{item.company}</p>
+                        <ul className="bullets">
+                          {item.bullets.map((bullet, index) => (
+                            <li key={index}>{bullet}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
+            {education.length > 0 && (
+              <div id="education">
+                <h3>{t.education}</h3>
+                <ol className="timeline">
+                  {education.map((item) => (
+                    <li key={item.id}>
+                      <span className="period">
+                        {formatPeriod(item.startDate, item.endDate, item.datePrecision, lang, t.present)}
+                      </span>
+                      <div>
+                        <h4>{item.title}</h4>
+                        <p className="subtitle">{item.institution}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
           </section>
         )}
 
@@ -274,7 +285,7 @@ function CopyButton({ label, copied, onCopy }: { label: string; copied: boolean;
   if (!navigator.clipboard) return null;
   return (
     <button type="button" className={copied ? 'copy copied' : 'copy'} aria-label={label} title={label} onClick={onCopy}>
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <LineIcon size={15}>
         {copied ? (
           <path d="M20 6 9 17l-5-5" />
         ) : (
@@ -283,7 +294,7 @@ function CopyButton({ label, copied, onCopy }: { label: string; copied: boolean;
             <path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" />
           </>
         )}
-      </svg>
+      </LineIcon>
     </button>
   );
 }

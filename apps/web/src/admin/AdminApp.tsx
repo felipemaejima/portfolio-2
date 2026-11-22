@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, NavLink, Navigate, Route, Routes, useParams } from 'react-router';
 import { ApiError, login, logout, refreshSession } from '../lib/api';
+import { Logo } from '../lib/logo';
 import { ThemeToggle } from '../lib/theme';
 import { markAdminBrowser } from '../lib/visit';
 import { AccountPage } from './AccountPage';
@@ -29,7 +30,10 @@ export function AdminApp() {
     <div className="admin">
       {/* Desktop: a sidebar. Phones: a top bar (Sair and theme always in it) whose menu button opens the nav as a drawer (styles.css). */}
       <aside className="admin-nav">
-        <span className="brand">Painel</span>
+        <span className="brand">
+          <Logo className="brand-mark" />
+          Painel
+        </span>
         <div
           id="admin-menu"
           className="admin-menu"

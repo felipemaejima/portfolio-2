@@ -18,12 +18,23 @@ const full: Portfolio = {
 
 describe('visibleSections', () => {
   it('lists every section in page order when all have content', () => {
-    expect(visibleSections(full)).toEqual(['about', 'skills', 'projects', 'experience', 'education', 'services', 'contact']);
+    expect(visibleSections(full)).toEqual(['about', 'skills', 'projects', 'experience', 'services', 'contact']);
   });
 
-  it('leaves out experience, education and services when they have no items', () => {
-    expect(visibleSections({ ...full, experiences: [], services: [] })).toEqual(['about', 'skills', 'projects', 'education', 'contact']);
-    expect(visibleSections({ ...full, education: [] })).toEqual(['about', 'skills', 'projects', 'experience', 'services', 'contact']);
+  // Trajetória keeps the id `experience` and holds Experiência and Formação: Formação is no section of its own.
+  it('shows Trajetória when there is experience, education or both, never a separate education section', () => {
+    const trajectory = ['about', 'skills', 'projects', 'experience', 'services', 'contact'];
+    expect(visibleSections({ ...full, education: [] })).toEqual(trajectory);
+    expect(visibleSections({ ...full, experiences: [] })).toEqual(trajectory);
+    expect(visibleSections(full)).toEqual(trajectory);
+  });
+
+  it('leaves out Trajetória when there is neither experience nor education', () => {
+    expect(visibleSections({ ...full, experiences: [], education: [] })).toEqual(['about', 'skills', 'projects', 'services', 'contact']);
+  });
+
+  it('leaves out services when there are none', () => {
+    expect(visibleSections({ ...full, services: [] })).toEqual(['about', 'skills', 'projects', 'experience', 'contact']);
   });
 
   it('leaves out skills when no category has any skill', () => {
