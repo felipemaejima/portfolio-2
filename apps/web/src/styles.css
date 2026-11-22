@@ -120,22 +120,26 @@ html:has(.site-header) { scroll-padding-top: var(--header-height); }
 
 /* Sections */
 .section { padding: 72px var(--gutter); border-top: 1px solid var(--color-divider); }
-.hero { padding: 100px var(--gutter) 88px; max-width: 760px; }
+/* The hero fills the first screen: text left, the animated logo (HeroLogo) right, both centred vertically; on phones the
+   logo sits small above the role. The logo is the last child, beside the five text rows. */
+.hero {
+  min-height: calc(100svh - var(--header-height)); padding: 100px var(--gutter) 88px;
+  display: grid; grid-template-columns: minmax(0, 600px) minmax(0, 1fr); column-gap: 64px; align-content: center;
+}
+.hero > :not(.hero-logo) { grid-column: 1; }
 .hero h1 { margin-bottom: 24px; }
-/* Decorative accent shapes in the empty space right of the hero (desktop only). Pseudo-elements: no markup,
-   not in the a11y tree, not matched by the .hero > * load sequence; gradients are never the LCP element. */
-.hero { position: relative; }
-main:has(> .hero) { overflow-x: clip; }
-.hero::before, .hero::after {
-  content: ''; position: absolute; z-index: -1; pointer-events: none; top: calc(50% - 170px);
-  width: 360px; height: 340px; left: max(100% + 48px, (100% + 100vw - var(--gutter)) / 2 - 180px);
+.hero .eyebrow { font-size: 14px; letter-spacing: normal; text-transform: none; color: var(--color-neutral-400); }
+.hero-logo {
+  grid-column: 2; grid-row: 1 / span 5; align-self: center; justify-self: center; width: min(100%, 440px);
+  overflow: visible; /* the stroke, the echo and the slide-in reach past the letters */
 }
-/* A thin outline and, off-centre inside it, a soft glow (static blur): both irregular rounded shapes. */
-.hero::before {
-  width: 290px; height: 270px; margin: 64px 0 0 76px; border-radius: 62% 38% 46% 54% / 55% 45% 55% 45%;
-  filter: blur(36px); opacity: 0.5; background: linear-gradient(135deg, var(--color-accent-800), var(--color-accent));
-}
-.hero::after { border-radius: 42% 58% 60% 40% / 52% 40% 60% 48%; border: 1px solid var(--color-accent-300); opacity: 0.35; }
+/* Its final state (also what reduced motion shows): Traço filled, no band; Encaixe in place, its echo still. */
+.hero-logo .letter { fill: currentColor; stroke: currentColor; stroke-width: 1.2; stroke-dasharray: 1; }
+.hero-logo .sheen { opacity: 0; }
+.hero-logo stop { stop-color: var(--color-accent-300); }
+.hero-logo.fit path { fill: currentColor; }
+.hero-logo .echo { transform: translate(14px, 10px); opacity: 0.7; }
+.hero-logo .echo path { fill: none; stroke: var(--color-accent); stroke-width: 1.5; }
 .lead { font-size: 17px; line-height: 1.6; color: var(--color-neutral-300); max-width: 560px; margin: 0 0 36px; }
 .inline-links {
   display: flex; flex-wrap: wrap; align-items: center; gap: 4px 20px;
@@ -387,8 +391,10 @@ main.section > h1 { font-size: 32px; margin-bottom: 24px; }
   :root { --gutter: 16px; }
   h1 { font-size: 38px; }
   .brand-name { display: none; }
-  .hero { padding: 56px var(--gutter); }
-  .hero::before, .hero::after { display: none; }
+  .hero { padding: 56px var(--gutter); grid-template-columns: minmax(0, 1fr); }
+  .hero-logo { grid-column: 1; grid-row: auto; order: -1; justify-self: start; width: 120px; margin-bottom: 24px; }
+  /* Strokes scale with the logo: thicker here, or they'd be half a pixel. */
+  .hero-logo .letter, .hero-logo .echo path { stroke-width: 3; }
   .copy { width: 44px; height: 44px; }
   .channels { gap: 0; }
   .channels li { line-height: 44px; }
@@ -440,7 +446,19 @@ main.section > h1 { font-size: 32px; margin-bottom: 24px; }
 /* Motion: one load sequence for the hero, then each section fades in as it scrolls into view. */
 @keyframes rise { from { opacity: 0; transform: translateY(12px); } }
 @keyframes fade { from { opacity: 0; } }
-@keyframes drift { 50% { transform: translate(-24px, -16px) rotate(60deg) scale(1.06); } }
+/* Hero logo. Traço: each letter's outline draws itself, then fills; then a band of light crosses it every 7s.
+   Encaixe: F and M slide in along the letters' 30° cut, overshoot a little and lock; an accent echo drifts slowly. */
+@keyframes logo-draw { from { stroke-dashoffset: 1; } }
+@keyframes logo-fill { from { fill-opacity: 0; } }
+@keyframes logo-sweep {
+  0% { opacity: 1; transform: translateX(0); }
+  35% { opacity: 1; transform: translateX(520px); }
+  36%, 100% { opacity: 0; transform: translateX(520px); }
+}
+@keyframes logo-in-f { from { opacity: 0; transform: translate(-60px, -35px); } }
+@keyframes logo-in-m { from { opacity: 0; transform: translate(60px, 35px); } }
+@keyframes logo-echo-in { from { opacity: 0; transform: translate(0, 0); } }
+@keyframes logo-float { 50% { transform: translate(24px, 17px); } }
 @keyframes shake { 20%, 60% { transform: translateX(-4px); } 40%, 80% { transform: translateX(4px); } }
 /* 142% of a circle's reference radius is the viewport's diagonal: the circle covers it from any point. */
 @keyframes reveal {
@@ -452,9 +470,12 @@ main.section > h1 { font-size: 32px; margin-bottom: 24px; }
   .hero > :nth-child(2) { animation-delay: 70ms; }
   .hero > :nth-child(3) { animation-delay: 140ms; }
   .hero > :nth-child(n + 4) { animation-delay: 210ms; }
-  /* Transform-only drift (composited); the blur stays static. */
-  .hero::before { animation: fade 1.6s ease-out both, drift 28s ease-in-out infinite; }
-  .hero::after { animation: fade 1.6s 0.3s ease-out both, spin 60s linear infinite; }
+  .hero-logo .letter { animation: logo-draw 1.4s cubic-bezier(0.65, 0, 0.35, 1) both, logo-fill 0.7s 1.3s ease-out both; }
+  .hero-logo .letter + .letter { animation-delay: 0.35s, 1.65s; }
+  .hero-logo .sheen { animation: logo-sweep 7s 2.6s ease-in-out infinite; }
+  .hero-logo .f { animation: logo-in-f 0.9s cubic-bezier(0.2, 1.25, 0.4, 1) both; }
+  .hero-logo .m { animation: logo-in-m 0.9s 0.12s cubic-bezier(0.2, 1.25, 0.4, 1) both; }
+  .hero-logo .echo { animation: logo-echo-in 0.8s 0.8s ease-out both, logo-float 9s 1.6s ease-in-out infinite; }
   /* Sections: driven by the scroll where supported; elsewhere they fade in once, when use-reveal.ts marks them. */
   @supports (animation-timeline: view()) {
     [data-reveal] { animation: rise linear both; animation-timeline: view(); animation-range: entry 0% entry 160px; }
