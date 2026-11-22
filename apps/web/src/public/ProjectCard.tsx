@@ -9,12 +9,13 @@ export function ProjectCard({ project }: { project: Project }) {
   return (
     <article
       className="card project-card"
-      // Where the cursor is, for the hover glow (styles.css). CSSOM, not a style attribute: the CSP allows it.
+      // Where the cursor is, as a fraction of the card (0 to 1), for the hover glow and tilt (styles.css). CSSOM, not a
+      // style attribute: the CSP allows it.
       onPointerMove={(event) => {
         const card = event.currentTarget;
-        const { left, top } = card.getBoundingClientRect();
-        card.style.setProperty('--glow-x', `${event.clientX - left}px`);
-        card.style.setProperty('--glow-y', `${event.clientY - top}px`);
+        const { left, top, width, height } = card.getBoundingClientRect();
+        card.style.setProperty('--pointer-x', String((event.clientX - left) / width));
+        card.style.setProperty('--pointer-y', String((event.clientY - top) / height));
       }}
     >
       {project.imageUrl ? (

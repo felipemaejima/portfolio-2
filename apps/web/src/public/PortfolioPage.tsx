@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { formatPeriod, useLang } from '../lib/i18n';
+import { LineIcon } from '../lib/line-icon';
 import { visibleSections } from '../lib/sections';
 import { paragraphs, splitItems } from '../lib/text';
 import type { Portfolio } from '../lib/types';
@@ -10,7 +11,6 @@ import { announceVisit } from '../lib/visit';
 import { ContactForm } from './ContactForm';
 import { FeaturedProjects } from './FeaturedProjects';
 import { HeroLogo } from './HeroLogo';
-import { LineIcon } from './LineIcon';
 import { SiteHeader } from './SiteHeader';
 
 export function PortfolioPage() {

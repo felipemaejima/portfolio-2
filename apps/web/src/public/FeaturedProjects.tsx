@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useLang } from '../lib/i18n';
+import { LineIcon } from '../lib/line-icon';
 import type { Project } from '../lib/types';
-import { LineIcon } from './LineIcon';
 import { ProjectCard } from './ProjectCard';
 
 /** Time between automatic steps, here and for the progress bar (--interval, styles.css). */

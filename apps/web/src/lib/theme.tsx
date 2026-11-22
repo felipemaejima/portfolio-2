@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { flushSync } from 'react-dom';
+import { LineIcon } from './line-icon';
 
 type Theme = 'light' | 'dark';
 
@@ -33,7 +34,7 @@ export function ThemeToggle({ labels }: { labels: { light: string; dark: string 
   return (
     <button
       type="button"
-      className="lang-toggle"
+      className="lang-toggle theme-toggle"
       aria-label={labels[next]}
       title={labels[next]}
       onClick={(event) => {
@@ -54,14 +55,17 @@ export function ThemeToggle({ labels }: { labels: { light: string; dark: string 
         document.startViewTransition(() => flushSync(toggle)).finished.then(done, done);
       }}
     >
-      {/* A ☾ glyph comes from a symbol font and is a hairline at this size. */}
-      {theme === 'light' ? (
-        <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true">
-          <path fill="currentColor" d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-        </svg>
-      ) : (
-        '☀'
-      )}
+      {/* Line icons like the site's others (Lucide's moon and sun); the theme to switch to. */}
+      <LineIcon size={22} strokeWidth={1.75}>
+        {theme === 'light' ? (
+          <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
+        ) : (
+          <>
+            <circle cx="12" cy="12" r="4" />
+            <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
+          </>
+        )}
+      </LineIcon>
     </button>
   );
 }

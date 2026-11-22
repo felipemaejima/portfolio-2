@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { useLang } from '../lib/i18n';
+import { LineIcon } from '../lib/line-icon';
 import { Logo } from '../lib/logo';
 import { visibleSections, type Section } from '../lib/sections';
 import { ThemeToggle } from '../lib/theme';
 import type { Portfolio } from '../lib/types';
-import { LineIcon } from './LineIcon';
 
 /** The nav links to the home page's sections that `portfolio` shows (none while it loads). */
 export function SiteHeader({ portfolio }: { portfolio?: Portfolio }) {
@@ -15,10 +15,9 @@ export function SiteHeader({ portfolio }: { portfolio?: Portfolio }) {
   const active = useActiveSection(sections);
   return (
     <header className="site-header">
-      {/* On mobile only the mark shows; the label keeps the name for screen readers. */}
+      {/* Only the mark shows; the label gives screen readers the name. */}
       <Link to="/" className="brand" aria-label={name}>
         <Logo className="brand-mark" />
-        <span className="brand-name">{name}</span>
       </Link>
       {/* Inline on wide screens; on narrow ones the menu button opens it as a popover (styles.css). */}
       <nav
@@ -42,9 +41,12 @@ export function SiteHeader({ portfolio }: { portfolio?: Portfolio }) {
           type="button"
           className="lang-toggle"
           onClick={() => setLang(lang === 'pt' ? 'en' : 'pt')}
-          aria-label={lang === 'pt' ? 'Switch to English' : 'Mudar para português'}
+          // The visible "PT / EN" stays its name, so voice control can say it (WCAG 2.5.3); the action is its description.
+          title={lang === 'pt' ? 'Switch to English' : 'Mudar para português'}
         >
-          {lang === 'pt' ? 'EN' : 'PT'}
+          {/* Both shown, the current one lit. */}
+          <span className={lang === 'pt' ? 'current' : undefined}>PT</span> /{' '}
+          <span className={lang === 'en' ? 'current' : undefined}>EN</span>
         </button>
         <a className="button button-accent" href={`/api/cv?lang=${lang}`} download>
           {t.downloadCv}
