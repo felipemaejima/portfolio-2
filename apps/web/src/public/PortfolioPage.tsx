@@ -8,6 +8,7 @@ import { useFetch } from '../lib/use-fetch';
 import { useReveal } from '../lib/use-reveal';
 import { announceVisit } from '../lib/visit';
 import { ContactForm } from './ContactForm';
+import { HeroLogo } from './HeroLogo';
 import { ProjectCard } from './ProjectCard';
 import { SiteHeader } from './SiteHeader';
 
@@ -90,6 +91,7 @@ export function PortfolioPage() {
               </li>
             )}
           </ul>
+          <HeroLogo />
         </section>
 
         <section id="about" className="section about" data-reveal>
