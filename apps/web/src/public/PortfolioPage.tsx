@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { formatPeriod, useLang } from '../lib/i18n';
 import { LineIcon } from '../lib/line-icon';
+import { trackPointer } from '../lib/pointer';
 import { visibleSections } from '../lib/sections';
 import { paragraphs, splitItems } from '../lib/text';
 import type { Portfolio } from '../lib/types';
@@ -106,7 +107,7 @@ export function PortfolioPage() {
 
         {/* Half photo, half text; without a photo the text stands alone. The first paragraph is the opening line. */}
         <section id="about" className="section about" data-reveal>
-          {profile.photoUrl && <img className="about-photo" src={profile.photoUrl} alt={profile.name} />}
+          {profile.photoUrl && <img className="about-photo" src={profile.photoUrl} alt={profile.name} onPointerMove={trackPointer} />}
           <div className="about-text">
             <h2 className="eyebrow">{t.aboutMe}</h2>
             {profile.about.flatMap(paragraphs).map((paragraph, index) => (
