@@ -5,7 +5,7 @@ export type Lang = 'pt' | 'en';
 
 const STRINGS = {
   pt: {
-    about: 'Sobre', projects: 'Projetos', skills: 'Habilidades', experience: 'Experiência', education: 'Formação',
+    about: 'Sobre', projects: 'Projetos', skills: 'Habilidades', experience: 'Trajetória', education: 'Formação',
     services: 'Serviços', contact: 'Contato', downloadCv: 'Baixar CV', seeProjects: 'Ver projetos', talkToMe: 'Falar comigo',
     aboutMe: 'Sobre mim', location: 'Localização', availability: 'Disponibilidade', modality: 'Modalidade',
     languages: 'Idiomas', seeAllProjects: 'Ver todos os projetos', code: 'Código', demo: 'Demo', present: 'atual',
@@ -21,7 +21,7 @@ const STRINGS = {
     copyEmail: 'Copiar e-mail', copyLink: 'Copiar link do {label}', copied: 'Copiado', messageSent: 'Mensagem enviada. Obrigado!',
   },
   en: {
-    about: 'About', projects: 'Projects', skills: 'Skills', experience: 'Experience', education: 'Education',
+    about: 'About', projects: 'Projects', skills: 'Skills', experience: 'Background', education: 'Education',
     services: 'Services', contact: 'Contact', downloadCv: 'Download CV', seeProjects: 'See projects', talkToMe: 'Get in touch',
     aboutMe: 'About me', location: 'Location', availability: 'Availability', modality: 'Work modality',
     languages: 'Languages', seeAllProjects: 'See all projects', code: 'Code', demo: 'Demo', present: 'present',

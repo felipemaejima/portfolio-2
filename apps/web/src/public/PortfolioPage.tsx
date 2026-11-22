@@ -167,46 +167,52 @@ export function PortfolioPage() {
           </div>
         </section>
 
+        {/* Trajetória: Experiência left, Formação right (stacked on phones), only the one with items. It keeps the id
+            `experience` and Formação's column `education`, where old links point to. */}
         {sections.includes('experience') && (
-          <section id="experience" className="section" data-reveal>
-            <h2>{t.professionalExperience}</h2>
-            <ol className="timeline">
-              {experiences.map((item) => (
-                <li key={item.id}>
-                  <span className="period">
-                    {formatPeriod(item.startDate, item.endDate, item.datePrecision, lang, t.present)}
-                  </span>
-                  <div>
-                    <h3>{item.role}</h3>
-                    <p className="subtitle">{item.company}</p>
-                    <ul className="bullets">
-                      {item.bullets.map((bullet, index) => (
-                        <li key={index}>{bullet}</li>
-                      ))}
-                    </ul>
-                  </div>
-                </li>
-              ))}
-            </ol>
-          </section>
-        )}
-
-        {sections.includes('education') && (
-          <section id="education" className="section" data-reveal>
-            <h2>{t.education}</h2>
-            <ol className="timeline">
-              {education.map((item) => (
-                <li key={item.id}>
-                  <span className="period">
-                    {formatPeriod(item.startDate, item.endDate, item.datePrecision, lang, t.present)}
-                  </span>
-                  <div>
-                    <h3>{item.title}</h3>
-                    <p className="subtitle">{item.institution}</p>
-                  </div>
-                </li>
-              ))}
-            </ol>
+          <section id="experience" className="section trajectory" data-reveal>
+            <h2>{t.experience}</h2>
+            {experiences.length > 0 && (
+              <div>
+                <h3>{t.professionalExperience}</h3>
+                <ol className="timeline">
+                  {experiences.map((item) => (
+                    <li key={item.id}>
+                      <span className="period">
+                        {formatPeriod(item.startDate, item.endDate, item.datePrecision, lang, t.present)}
+                      </span>
+                      <div>
+                        <h4>{item.role}</h4>
+                        <p className="subtitle">{item.company}</p>
+                        <ul className="bullets">
+                          {item.bullets.map((bullet, index) => (
+                            <li key={index}>{bullet}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
+            {education.length > 0 && (
+              <div id="education">
+                <h3>{t.education}</h3>
+                <ol className="timeline">
+                  {education.map((item) => (
+                    <li key={item.id}>
+                      <span className="period">
+                        {formatPeriod(item.startDate, item.endDate, item.datePrecision, lang, t.present)}
+                      </span>
+                      <div>
+                        <h4>{item.title}</h4>
+                        <p className="subtitle">{item.institution}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
           </section>
         )}
 
