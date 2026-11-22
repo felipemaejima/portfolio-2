@@ -13,8 +13,11 @@ vi.mock('../lib/api', async (original) => ({
 }));
 const mockApi = vi.mocked(api);
 
-const openAdmin = () =>
-  render(<RouterProvider router={createMemoryRouter([{ path: '/admin/*', element: <AdminApp /> }], { initialEntries: ['/admin'] })} />);
+const openAdmin = (url = '/admin') => {
+  const router = createMemoryRouter([{ path: '/admin/*', element: <AdminApp /> }], { initialEntries: [url] });
+  render(<RouterProvider router={router} />);
+  return router;
+};
 
 beforeEach(() => {
   localStorage.clear();
@@ -39,4 +42,29 @@ it('leaves a browser that only reached the login form unmarked', async () => {
 
   announceVisit('/', 'pt');
   expect(mockApi).toHaveBeenCalledWith('/visits', expect.anything());
+});
+
+it('offers the Login pelo Google as a plain link to the API, which takes the browser to Google', async () => {
+  vi.mocked(refreshSession).mockResolvedValue(false);
+  openAdmin();
+  const link = await screen.findByRole('link', { name: 'Entrar com Google' });
+  expect(link.getAttribute('href')).toBe('/api/auth/google');
+});
+
+it.each([
+  ['nao-vinculada', 'Essa conta Google não está vinculada.'],
+  ['erro', 'Não foi possível entrar com Google.'],
+])('back from Google with ?google=%s, says "%s" and takes it off the URL', async (failure, message) => {
+  vi.mocked(refreshSession).mockResolvedValue(false);
+  const router = openAdmin(`/admin?google=${failure}`);
+  expect((await screen.findByRole('alert')).textContent).toBe(message);
+  expect(router.state.location.search).toBe('');
+});
+
+it('says nothing when the admin cancelled on Google', async () => {
+  vi.mocked(refreshSession).mockResolvedValue(false);
+  const router = openAdmin('/admin?google=cancelado');
+  await screen.findByRole('button', { name: 'Entrar' });
+  expect(screen.queryByRole('alert')).toBeNull();
+  expect(router.state.location.search).toBe('');
 });

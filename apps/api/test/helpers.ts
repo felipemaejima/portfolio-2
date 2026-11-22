@@ -5,17 +5,20 @@ import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
+import { GoogleProvider, type GoogleChecks, type GoogleAccount } from '../src/auth/google.provider';
 import { CONFIG, loadConfig, type Config } from '../src/config/config';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { setupApp } from '../src/setup-app';
 
 export const ADMIN = { email: 'admin@test.dev', password: 'correct-horse-battery' };
 
-export async function createApp(overrides: Partial<Config> = {}) {
-  const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+/** The real app; `google` replaces the Google provider (never an env flag: that would be a back door in production). */
+export async function createApp(overrides: Partial<Config> = {}, { google }: { google?: ReturnType<typeof fakeGoogle> } = {}) {
+  let builder = Test.createTestingModule({ imports: [AppModule] })
     .overrideProvider(CONFIG)
-    .useValue({ ...loadConfig(), ...overrides })
-    .compile();
+    .useValue({ ...loadConfig(), ...overrides });
+  if (google) builder = builder.overrideProvider(GoogleProvider).useValue(google);
+  const moduleRef = await builder.compile();
   const app = moduleRef.createNestApplication<NestExpressApplication>();
   setupApp(app);
   await app.init();
@@ -26,7 +29,7 @@ export async function resetDb(app: NestExpressApplication) {
   await app
     .get(PrismaService)
     .$executeRawUnsafe(
-      'TRUNCATE "Admin", "Profile", "SocialLink", "SkillCategory", "Skill", "Project", "Experience", "Education", "Service", "Media", "ContactMessage", "RateLimit" CASCADE',
+      'TRUNCATE "Admin", "Profile", "SocialLink", "SkillCategory", "Skill", "Project", "Experience", "Education", "Service", "Media", "ContactMessage", "RateLimit", "LinkedAccount" CASCADE',
     );
 }
 
@@ -65,4 +68,25 @@ export async function fakeWebhook() {
       return new Promise((resolve) => server.close(resolve));
     },
   };
+}
+
+/**
+ * Stands in for Google: the authorization URL echoes the state, and the exchange answers `account` (or throws it) only
+ * when handed back the very state, nonce and code_verifier the URL was built with (they travel in the cookie).
+ */
+export function fakeGoogle() {
+  let started: GoogleChecks | undefined;
+  const google = {
+    account: { subject: 'google-sub-1', email: 'admin@gmail.test' } as GoogleAccount | Error,
+    authorizationUrl: async (checks: GoogleChecks) => {
+      started = checks;
+      return `https://google.test/auth?state=${checks.state}`;
+    },
+    exchange: async (_callback: URLSearchParams, checks: GoogleChecks) => {
+      if (JSON.stringify(checks) !== JSON.stringify(started)) throw new Error('not the checks of the started flow');
+      if (google.account instanceof Error) throw google.account;
+      return google.account;
+    },
+  };
+  return google;
 }

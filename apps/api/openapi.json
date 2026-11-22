@@ -108,6 +108,36 @@
         ]
       }
     },
+    "/auth/google": {
+      "get": {
+        "operationId": "AuthController_googleStart",
+        "parameters": [],
+        "responses": {
+          "302": {
+            "description": "To Google, or to /admin?google=erro without Google credentials"
+          }
+        },
+        "summary": "Login pelo Google, start: fresh state, nonce and PKCE verifier, sealed in a cookie, and off to Google.",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/google/callback": {
+      "get": {
+        "operationId": "AuthController_googleCallback",
+        "parameters": [],
+        "responses": {
+          "302": {
+            "description": "To /admin with a session, or to /admin?google=erro|cancelado|nao-vinculada"
+          }
+        },
+        "summary": "Login pelo Google, Google's callback. Only ever redirects to fixed paths of the panel, never to one from the request.",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/admin/uploads": {
       "post": {
         "operationId": "MediaController_upload",

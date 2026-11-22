@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { CONFIG, type Config } from '../config/config';
 import type { Admin } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import type { GoogleAccount } from './google.provider';
 
 type RefreshPayload = { sub: string; ver: number };
 
@@ -25,6 +26,17 @@ export class AuthService {
     const valid = await argon2.verify(admin?.passwordHash ?? (await this.dummyHash), password);
     if (!admin || !valid) throw new UnauthorizedException('Invalid credentials');
     return admin;
+  }
+
+  /** The Admin whose Conta vinculada this Google account is, refreshing its displayed email; undefined without one. */
+  async findByGoogleAccount({ subject, email }: GoogleAccount) {
+    const linked = await this.prisma.linkedAccount.findUnique({
+      where: { provider_subject: { provider: 'GOOGLE', subject } },
+      include: { admin: true },
+    });
+    if (!linked) return undefined;
+    if (linked.email !== email) await this.prisma.linkedAccount.update({ where: { id: linked.id }, data: { email } });
+    return linked.admin;
   }
 
   async refresh(token: string | undefined) {
