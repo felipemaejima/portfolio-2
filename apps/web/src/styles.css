@@ -404,7 +404,7 @@ main.section > h1 { font-size: 32px; margin-bottom: 24px; }
 .admin-menu-footer { margin-top: auto; display: flex; gap: 8px; align-items: center; }
 .admin-nav .lang-toggle { display: inline-flex; align-items: center; justify-content: center; }
 .admin-nav .menu-toggle { display: none; }
-.admin-main h1 { font-size: 28px; }
+.admin-main h1, .admin-form h2 { font-size: 28px; } /* a page's second card (Conta Google) matches its first */
 .admin-title { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 20px; }
 .admin-form {
   background: var(--color-surface-2); border: 1px solid var(--color-divider); border-radius: 12px; padding: 24px;
