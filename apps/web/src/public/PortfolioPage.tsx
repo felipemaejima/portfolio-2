@@ -46,6 +46,15 @@ export function PortfolioPage() {
   }
   const sections = visibleSections(data);
   const skills = skillCategories.filter((category) => category.skills.length > 0);
+  // Line icons from Lucide (ISC license): map pin, clock, laptop, globe. A fact left empty isn't listed.
+  const facts = (
+    [
+      [t.location, profile.location, <><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0" /><circle cx="12" cy="10" r="3" /></>],
+      [t.availability, profile.availability, <><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></>],
+      [t.modality, profile.workModality, <><path d="M20 16V7a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v9m16 0H4m16 0 1.28 2.55a1 1 0 0 1-.9 1.45H3.62a1 1 0 0 1-.9-1.45L4 16" /></>],
+      [t.languages, profile.spokenLanguages, <><circle cx="12" cy="12" r="10" /><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" /><path d="M2 12h20" /></>],
+    ] as const
+  ).filter(([, value]) => splitItems(value).length > 0);
   const copy = async (value: string) => {
     await navigator.clipboard.writeText(value);
     setCopied(value);
@@ -94,36 +103,33 @@ export function PortfolioPage() {
           <HeroLogo />
         </section>
 
+        {/* Half photo, half text; without a photo the text stands alone. The first paragraph is the opening line. */}
         <section id="about" className="section about" data-reveal>
-          {profile.photoUrl ? (
-            <img className="photo" src={profile.photoUrl} alt={profile.name} />
-          ) : (
-            <div className="photo placeholder" aria-hidden="true" />
-          )}
-          <div>
-            <h2>{t.aboutMe}</h2>
+          {profile.photoUrl && <img className="about-photo" src={profile.photoUrl} alt={profile.name} />}
+          <div className="about-text">
+            <h2 className="eyebrow">{t.aboutMe}</h2>
             {profile.about.flatMap(paragraphs).map((paragraph, index) => (
-              <p key={index} className="body-text">
+              <p key={index} className={index ? 'body-text' : 'opening'}>
                 {paragraph}
               </p>
             ))}
-            <dl className="facts">
-              {(
-                [
-                  [t.location, profile.location],
-                  [t.availability, profile.availability],
-                  [t.modality, profile.workModality],
-                  [t.languages, profile.spokenLanguages],
-                ] as const
-              ).map(([label, value]) => (
-                <div key={label}>
-                  <dt>{label}</dt>
-                  <dd>
-                    <Items text={value} />
-                  </dd>
-                </div>
-              ))}
-            </dl>
+            {facts.length > 0 && (
+              <dl className="facts">
+                {facts.map(([label, value, icon]) => (
+                  <div key={label}>
+                    <dt>
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        {icon}
+                      </svg>
+                      {label}
+                    </dt>
+                    <dd>
+                      <Items text={value} />
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            )}
           </div>
         </section>
 
