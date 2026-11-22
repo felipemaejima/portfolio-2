@@ -126,6 +126,8 @@ html:has(.site-header) { scroll-padding-top: var(--header-height); }
    a taller one just grows. Scrolling stays free, no snap. Phones keep the natural height. */
 @media (width > 860px) {
   section.section { min-height: calc(100svh - var(--header-height)); align-content: center; }
+  /* Its one row takes the whole height, for the photo; the text centres itself in it. */
+  section.about { align-content: stretch; }
 }
 /* The hero fills the first screen: text left, the animated logo (HeroLogo) right, both centred vertically; on phones the
    logo sits small above the role. The logo is the last child, beside the five text rows. */
@@ -153,13 +155,26 @@ html:has(.site-header) { scroll-padding-top: var(--header-height); }
 }
 .inline-links li { display: flex; align-items: center; gap: 2px; }
 
-.about { display: grid; grid-template-columns: 220px 1fr; gap: 56px; }
-.about > div { max-width: 600px; }
-.photo { width: 180px; height: 180px; border-radius: 12px; object-fit: cover; }
+/* No image (project cards): a striped block. */
 .placeholder { background: repeating-linear-gradient(45deg, var(--color-surface), var(--color-surface) 10px, var(--color-neutral-800) 10px, var(--color-neutral-800) 20px); }
-.facts { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; max-width: 520px; margin: 28px 0 0; }
-.facts dt { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-neutral-500); }
-.facts dd { margin: 4px 0 0; font-size: 14px; }
+
+/* About: half photo, half text; without a photo the text stands alone. The photo stays inside the margins and fills the
+   section's height, cropped; size containment keeps its own size out of the row's, so the text sets the height. Square
+   corners, the bottom right cut at the slant of the logo's M leg (22 tall for 38 wide). */
+.about { display: grid; grid-template-columns: minmax(0, 1fr); gap: 72px; }
+.about:has(.about-photo) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.about-text { max-width: 640px; align-self: center; }
+.about-photo {
+  --cut: 96px; width: 100%; height: 100%; contain: size; object-fit: cover;
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - var(--cut) * 22 / 38), calc(100% - var(--cut)) 100%, 0 100%);
+}
+.opening { font-size: 30px; line-height: 1.3; letter-spacing: -0.01em; text-wrap: pretty; margin: 0 0 24px; }
+.facts { margin: 32px 0 0; }
+.facts > div { padding: 14px 0; }
+.facts > div + div { border-top: 1px solid var(--color-divider); }
+.facts dt { display: flex; align-items: center; gap: 12px; font-size: 13px; color: var(--color-neutral-400); }
+.facts svg { flex: none; color: var(--color-accent); }
+.facts dd { margin: 2px 0 0 32px; font-size: 15px; }
 /* Lists typed as "a | b" (PortfolioPage Items): wrap between items, not inside them. */
 .item { display: inline-block; }
 .item:not(:last-child)::after { content: '|'; margin: 0 0.5em; }
@@ -407,8 +422,11 @@ main.section > h1 { font-size: 32px; margin-bottom: 24px; }
   .copy { width: 44px; height: 44px; }
   .channels { gap: 0; }
   .channels li { line-height: 44px; }
-  .about, .facts, .contact, .grid-3, .grid-4, .grid-fit, .timeline > li, .localized { grid-template-columns: 1fr; }
-  .about { gap: 24px; }
+  .about, .about:has(.about-photo), .contact, .grid-3, .grid-4, .grid-fit, .timeline > li, .localized { grid-template-columns: 1fr; }
+  /* The photo on top, in portrait. */
+  .about { gap: 32px; }
+  .about-photo { --cut: 56px; height: auto; max-width: 440px; aspect-ratio: 4 / 5; }
+  .opening { font-size: 24px; }
   /* Admin: a sticky top bar (brand, Sair, theme, menu button); the menu opens as a drawer below it. Block, not grid: a grid
      item would only stick within its own row. */
   .admin { display: block; }
