@@ -661,19 +661,22 @@ main.section > h1 { font-size: 32px; margin-bottom: 24px; }
       .admin-menu:popover-open::backdrop, .item-actions:popover-open::backdrop { opacity: 0; }
     }
   }
-  /* Project cards: a soft accent glow follows the cursor and the card tilts toward it, in 3D (ProjectCard sets
-     --pointer-x/y, 0 to 1 across the card); mouse and pen only. The tilt goes with the lift above: over the part that
-     opens the card, not its Code/Demo links. */
+  /* Project cards and the About photo tilt toward the cursor, in 3D (trackPointer sets --pointer-x/y, 0 to 1 across the
+     element); on the cards a soft accent glow follows it too. Mouse and pen only. The card's tilt goes with the lift
+     above: over the part that opens the card, not its Code/Demo links. */
   @media (hover: hover) and (pointer: fine) {
+    .project-card, .about-photo {
+      --tilt: perspective(1000px) rotateX(calc((var(--pointer-y, 0.5) - 0.5) * 10deg)) rotateY(calc((0.5 - var(--pointer-x, 0.5)) * 10deg));
+    }
+    .about-photo { transition: transform 0.2s; }
+    .about-photo:hover { transform: var(--tilt); }
     .project-card { isolation: isolate; }
     .project-card::before {
       content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none; opacity: 0; transition: opacity 0.3s;
       background: radial-gradient(240px circle at calc(var(--pointer-x, 0.5) * 100%) calc(var(--pointer-y, 0.5) * 100%), color-mix(in srgb, var(--color-accent) 22%, transparent), transparent);
     }
     .project-card:hover::before { opacity: 1; }
-    .project-card:has(.card-link:hover) {
-      transform: perspective(1000px) rotateX(calc((var(--pointer-y, 0.5) - 0.5) * 10deg)) rotateY(calc((0.5 - var(--pointer-x, 0.5)) * 10deg)) translateY(-2px);
-    }
+    .project-card:has(.card-link:hover) { transform: var(--tilt) translateY(-2px); }
     /* Header logo: F and M part along their 30° cut (in the logo's own units, 198 tall). */
     .brand-mark path { transition: transform 0.35s cubic-bezier(0.2, 1.25, 0.4, 1); }
     a.brand:hover .brand-mark path:first-child { transform: translate(-21px, -12px); }
