@@ -15,8 +15,12 @@ Alguém que não é o admin abriu o site público. Voltar em menos de 24 horas, 
 _Evitar_: acesso
 
 **Login**:
-O admin entrou no painel com e-mail e senha. Renovar uma sessão aberta ou errar a senha não é um Login.
+O admin entrou no painel provando quem é: com e-mail e senha ou com uma Conta vinculada. Renovar uma sessão aberta ou uma tentativa recusada não é um Login.
 _Evitar_: acesso
+
+**Conta vinculada**:
+Conta de um provedor externo (hoje, só o Google) que o admin associou ao painel para fazer Login sem senha.
+_Evitar_: identidade, login social
 
 **Alerta**:
 Aviso automático da AWS de que algo está errado em produção: erro, custo fora do previsto ou recurso exposto.
